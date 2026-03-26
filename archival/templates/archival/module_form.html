@@ -1,0 +1,23 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2 class="h4 mb-3">{{ action }} Module</h2>
+<form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label>Module Name</label>
+        <input type="text" name="name" class="form-control" value="{{ module.name|default:'' }}" required>
+    </div>
+    <div class="mb-3">
+        <label>Last Archival Date</label>
+        {% if module.last_archival_date %}
+            <input type="text" class="form-control" value="{{ module.last_archival_date|date:'Y-m-d H:i' }}" readonly>
+        {% else %}
+            <input type="text" class="form-control" value="No archival done yet" readonly>
+        {% endif %}
+        <small class="text-muted">This is automatically updated when archival runs.</small>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 'module_list' app.id %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

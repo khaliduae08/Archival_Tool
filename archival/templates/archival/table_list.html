@@ -1,0 +1,32 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2 class="h4 mb-3">Tables for Module: {{ module.name }}</h2>
+<a href="{% url 'table_add' module.id %}" class="btn btn-success mb-3">Add New Table</a>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Sequence</th>
+            <th>Table Name</th>
+            <th>Select Script</th>
+            <th>Insert Script</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for table in tables %}
+        <tr>
+            <td>{{ table.sequence }}</td>
+            <td>{{ table.table_name }}</td>
+            <td><pre>{{ table.select_script|truncatechars:50 }}</pre></td>
+            <td><pre>{{ table.insert_script|truncatechars:50 }}</pre></td>
+            <td>
+                <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>
+                <a href="{% url 'table_delete' module.id table.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this table?')">Delete</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<a href="{% url 'module_list' module.application.id %}" class="btn btn-secondary">Back to Modules</a>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="h4 mb-3">Archival Modules by Application</h2>
+        {% for app in apps %}
+            <h3 class="h5 mt-4">{{ app.name }}</h3>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Module Name</th>
+                            <th>Last Archival</th>
+                            <th>Select New Archival Date</th>
+                            <th>Action</th>
+                        </thead>
+                    <tbody>
+                        {% for module in app.modules.all %}
+                        <tr>
+                            <td>{{ module.name }}</td>
+                            <td>
+                                {% if module.last_archival_date %}
+                                    {{ module.last_archival_date|date:"Y-m-d" }}
+                                {% else %}
+                                    Never
+                                {% endif %}
+                            </td>
+                            <td>
+                                <input type="date" class="form-control" id="date-{{ module.id }}" 
+                                       max="{{ today }}" placeholder="YYYY-MM-DD">
+                            </td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" 
+                                        data-module-id="{{ module.id }}"
+                                        data-last="{% if module.last_archival_date %}{{ module.last_archival_date|date:'Y-m-d' }}{% endif %}"
+                                        onclick="processModule(this, {{ module.id }}, '{{ module.name|escapejs }}')">
+                                    Process
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4">No modules defined for this application. <a href="{% url 'module_add' app.id %}">Add one</a>.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% empty %}
+            <p>No applications defined. <a href="{% url 'application_add' %}">Create an application</a> first.</p>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+function processModule(button, moduleId, moduleName) {
+    var dateInput = document.getElementById('date-' + moduleId);
+    var selectedDateStr = dateInput.value;
+    if (!selectedDateStr) {
+        alert('Please select a new archival date.');
+        dateInput.focus();
+        return;
+    }
+
+    var lastArchivalStr = button.getAttribute('data-last');
+    var selectedDate = new Date(selectedDateStr + 'T00:00:00');
+    if (lastArchivalStr) {
+        var lastDate = new Date(lastArchivalStr + 'T00:00:00');
+        if (selectedDate <= lastDate) {
+            alert('New archival date must be newer than the last archival date (' + lastArchivalStr + ').');
+            return;
+        }
+    }
+
+    startProcess(button, moduleId, moduleName, selectedDateStr);
+}
+</script>
+{% endblock %}
