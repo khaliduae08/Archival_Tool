@@ -1,0 +1,36 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2>Database Connections</h2>
+<a href="{% url 'connection_add' %}" class="btn btn-success mb-3">Add New Connection</a>
+<div class="table-responsive">
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Server</th>
+                <th>Database</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th>Actions</th>
+            </thead>
+        <tbody>
+            {% for conn in connections %}
+            <tr>
+                <td>{{ conn.server }}</td>
+                <td>{{ conn.server }}</td>
+                <td>{{ conn.database }}</td>
+                <td>{{ conn.username }}</td>
+                <td>********</td>
+                <td>
+                    <a href="{% url 'connection_edit' conn.id %}" class="btn btn-sm btn-warning">Edit</a>
+                    <a href="{% url 'connection_delete' conn.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this connection?')">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">No connections defined. Add one.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

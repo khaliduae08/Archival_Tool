@@ -29,6 +29,7 @@
                 <a href="{% url 'module_list' app.id %}" class="btn btn-sm btn-info">Modules</a>
                 <a href="{% url 'application_edit' app.id %}" class="btn btn-sm btn-warning">Edit</a>
                 <a href="{% url 'application_delete' app.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this application?')">Delete</a>
+                <a href="{% url 'module_run' app.id %}" class="btn btn-sm btn-success">Process</a>
             </td>
         </tr>
         {% empty %}

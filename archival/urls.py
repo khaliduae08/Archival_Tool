@@ -2,8 +2,25 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    # Admin dashboard and management
+    path('admin_dashboard/', views.admin_dashboard, name='admin_dashboard'),
+    path('users/', views.user_list, name='user_list'),
+    path('users/add/', views.user_add, name='user_add'),
+    path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
+    path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
+    path('groups/', views.group_list, name='group_list'),
+    path('groups/add/', views.group_add, name='group_add'),
+    path('groups/<int:pk>/edit/', views.group_edit, name='group_edit'),
+    path('groups/<int:pk>/delete/', views.group_delete, name='group_delete'),
+
+    # Home page
     path('', views.home, name='home'),
-    path('connections/', views.edit_connections, name='connections'),
+
+    # Database connection management    
+    path('connections/', views.connection_list, name='connection_list'),
+    path('connections/add/', views.connection_add, name='connection_add'),
+    path('connections/<int:pk>/edit/', views.connection_edit, name='connection_edit'),
+    path('connections/<int:pk>/delete/', views.connection_delete, name='connection_delete'),
 
     # Application module
     path('applications/', views.application_list, name='application_list'),
@@ -16,6 +33,7 @@ urlpatterns = [
     path('applications/<int:app_id>/modules/add/', views.module_add, name='module_add'),
     path('applications/<int:app_id>/modules/<int:pk>/edit/', views.module_edit, name='module_edit'),
     path('applications/<int:app_id>/modules/<int:pk>/delete/', views.module_delete, name='module_delete'),
+    path('applications/<int:app_id>/modules_run/', views.module_run, name='module_run'),
 
     # Table management under module
     path('modules/<int:module_id>/tables/', views.table_list, name='table_list'),

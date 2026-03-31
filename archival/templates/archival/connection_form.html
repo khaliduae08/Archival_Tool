@@ -1,0 +1,39 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h4>{{ action }} Database Connection</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}                    
+                    <div class="mb-3">
+                        <label>Server</label>
+                        <input type="text" name="server" class="form-control" value="{{ connection.server|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Database</label>
+                        <input type="text" name="database" class="form-control" value="{{ connection.database|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Username</label>
+                        <input type="text" name="username" class="form-control" value="{{ connection.username|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Password</label>
+                        <input type="password" name="password" class="form-control" placeholder="{% if action == 'Edit' %}Leave blank to keep current{% endif %}" {% if action == 'Add' %}required{% endif %}>
+                        {% if action == 'Edit' %}
+                            <small class="text-muted">Leave blank to keep current password.</small>
+                        {% endif %}
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a href="{% url 'connection_list' %}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

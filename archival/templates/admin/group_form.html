@@ -1,0 +1,92 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4>{{ action }} Group</h4>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label>Group Name</label>
+                        <input type="text" name="name" class="form-control" value="{{ group.name|default:'' }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Permissions</label>
+                        <div class="row">
+                            <div class="col-md-5">
+                                <strong>Available permissions</strong><br>
+                                <select id="available_perms" multiple size="10" class="form-control">
+                                    {% for perm in available_perms %}
+                                        <option value="{{ perm.id }}">{{ perm.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" id="add_perm" class="btn btn-sm btn-primary mt-2">Add &gt;&gt;</button>
+                            </div>
+                            <div class="col-md-2 text-center">
+                                <!-- empty -->
+                            </div>
+                            <div class="col-md-5">
+                                <strong>Chosen permissions</strong><br>
+                                <select id="chosen_perms" name="permissions" multiple size="10" class="form-control">
+                                    {% for perm in chosen_perms %}
+                                        <option value="{{ perm.id }}">{{ perm.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" id="remove_perm" class="btn btn-sm btn-danger mt-2">&lt;&lt; Remove</button>
+                            </div>
+                        </div>
+                        <small class="text-muted">Select permissions to assign to this group.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a href="{% url 'group_list' %}" class="btn btn-secondary">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('add_perm').onclick = function() {
+        var available = document.getElementById('available_perms');
+        var chosen = document.getElementById('chosen_perms');
+        for (var i = 0; i < available.options.length; i++) {
+            if (available.options[i].selected) {
+                chosen.appendChild(available.options[i]);
+                i--;
+            }
+        }
+        // sort chosen by name
+        var options = Array.from(chosen.options);
+        options.sort((a, b) => a.text.localeCompare(b.text));
+        while (chosen.options.length > 0) chosen.remove(0);
+        options.forEach(opt => chosen.appendChild(opt));
+    };
+    document.getElementById('remove_perm').onclick = function() {
+        var chosen = document.getElementById('chosen_perms');
+        var available = document.getElementById('available_perms');
+        for (var i = 0; i < chosen.options.length; i++) {
+            if (chosen.options[i].selected) {
+                available.appendChild(chosen.options[i]);
+                i--;
+            }
+        }
+        // sort available by name
+        var options = Array.from(available.options);
+        options.sort((a, b) => a.text.localeCompare(b.text));
+        while (available.options.length > 0) available.remove(0);
+        options.forEach(opt => available.appendChild(opt));
+    };
+    // Ensure all selected options are submitted
+    document.querySelector('form').onsubmit = function() {
+        var chosen = document.getElementById('chosen_perms');
+        for (var i = 0; i < chosen.options.length; i++) {
+            chosen.options[i].selected = true;
+        }
+        return true;
+    };
+</script>
+{% endblock %}

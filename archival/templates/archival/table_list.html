@@ -10,6 +10,7 @@
             <th>Table Name</th>
             <th>Select Script</th>
             <th>Insert Script</th>
+            <th>Delete Script</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -20,6 +21,7 @@
             <td>{{ table.table_name }}</td>
             <td><pre>{{ table.select_script|truncatechars:50 }}</pre></td>
             <td><pre>{{ table.insert_script|truncatechars:50 }}</pre></td>
+            <td><pre>{{ table.delete_script|truncatechars:50 }}</pre></td>
             <td>
                 <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>
                 <a href="{% url 'table_delete' module.id table.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this table?')">Delete</a>

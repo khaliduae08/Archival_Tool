@@ -1,0 +1,46 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="h4 mb-3">Users</h2>
+        <a href="{% url 'user_add' %}" class="btn btn-success mb-3">Add New User</a>
+        <div class="table-responsive">
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Group</th>
+                        <th>Superuser</th>
+                        <th>Actions</th>
+                    </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>
+                            {% for group in user.groups.all %}
+                                {{ group.name }}{% if not forloop.last %}, {% endif %}
+                            {% empty %}
+                                -
+                            {% endfor %}
+                        </td>
+                        <td>{% if user.is_superuser %}Yes{% else %}No{% endif %}</td>
+                        <td>
+                            <a href="{% url 'user_edit' user.id %}" class="btn btn-sm btn-warning">Edit</a>
+                             {% if user != request.user %}
+                            <a href="{% url 'user_delete' user.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete user {{ user.username }}?')">Delete</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5">No users found.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

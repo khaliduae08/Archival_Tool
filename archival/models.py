@@ -51,6 +51,7 @@ class ArchivalTable(models.Model):
     sequence = models.PositiveIntegerField(help_text="Execution order")
     select_script = models.TextField(default='select * from', help_text="select script for source")
     insert_script = models.TextField(default='insert into', help_text="insert script for destination")
+    delete_script = models.TextField(default='delete from', help_text="Delete script for destination")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -1,0 +1,63 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2>Dashboard</h2>
+<div class="row">
+    {% if user.is_superuser or user.groups.all.0.name == 'admin' %}
+    <div class="col-md-3">
+        <div class="card text-white bg-primary mb-3">
+            <div class="card-header">Users</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ users.count }}</h5>
+                <a href="{% url 'user_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success mb-3">
+            <div class="card-header">Groups</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ groups.count }}</h5>
+                <a href="{% url 'group_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>    
+    <div class="col-md-3">
+        <div class="card text-white bg-info mb-3">
+            <div class="card-header">Database Connections</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ connections.count }}</h5>
+                <a href="{% url 'connection_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    <div class="col-md-3">
+        <div class="card text-white bg-warning mb-3">
+            <div class="card-header">Applications</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ applications.count }}</h5>
+                <a href="{% url 'application_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger mb-3">
+            <div class="card-header">Modules</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ modules.count }}</h5>
+                <a href="{% url 'application_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-secondary mb-3">
+            <div class="card-header">Tables</div>
+            <div class="card-body">
+                <h5 class="card-title">{{ tables.count }}</h5>
+                <a href="{% url 'application_list' %}" class="btn btn-light btn-sm">Manage</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mfloos Data LifeCycle Tool</title>
+    <link href="{% static 'archival/css/bootstrap.min.css' %}" rel="stylesheet">
+    <script src="{% static 'archival/js/jquery.min.js' %}"></script> 
+    <style>
+        .dashboard-header {
+            background-color: #f8f9fc;
+            padding: 20px;
+            border-bottom: 1px solid #e3e6f0;
+            text-align: center;
+        }
+        .stat-card {
+            background: white;
+            border-left: 4px solid #4e73df;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58,59,69,0.15);
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .menu-item {
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+            color: #3a3b45;
+            text-decoration: none;
+            display: block;
+        }
+        .menu-item:hover {
+            background-color: #eaecf4;
+            border-radius: 0.35rem;
+        }
+        .dashboard-title {
+            color: #5a5c69;
+            text-decoration: none;
+        }   
+        .dashboard-title:hover {
+            color: #5a5c69;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="dashboard-header align-items-center">
+                <h1 class="dashboard-title h3 mb-0 text-gray-800">Data LifeCycle Tool</h1>
+            </div>    
+            <br>
+            <br
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Login</h4>
+            </div>
+            <div class="card-body">
+                {% if form.errors %}
+                    <div class="alert alert-danger">Invalid username or password.</div>
+                {% endif %}
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label>Username</label>
+                        <input type="text" name="username" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>Password</label>
+                        <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>
