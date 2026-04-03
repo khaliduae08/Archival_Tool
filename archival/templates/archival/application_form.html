@@ -46,6 +46,11 @@
             {% endfor %}
         </select>
     </div>
+        <div class="mb-3">
+            <label>Max Date (optional)</label>
+            <input type="date" name="max_date" class="form-control" value="{{ app.max_date|default:'' }}">
+        </div>
+
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="{% url 'application_list' %}" class="btn btn-secondary">Cancel</a>
 </form>

@@ -11,6 +11,8 @@
             <th>Select Script</th>
             <th>Insert Script</th>
             <th>Delete Script</th>
+            <th>Account Summary</th>
+            <th>Identity Insert</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -19,9 +21,11 @@
         <tr>
             <td>{{ table.sequence }}</td>
             <td>{{ table.table_name }}</td>
-            <td><pre>{{ table.select_script|truncatechars:50 }}</pre></td>
-            <td><pre>{{ table.insert_script|truncatechars:50 }}</pre></td>
-            <td><pre>{{ table.delete_script|truncatechars:50 }}</pre></td>
+            <td><pre>{{ table.select_script|truncatechars:35 }}</pre></td>
+            <td><pre>{{ table.insert_script|truncatechars:35 }}</pre></td>
+            <td><pre>{{ table.delete_script|truncatechars:35 }}</pre></td>
+            <td>{{ table.acct_sum }}</td>
+            <td>{{ table.identity_insert|yesno:"Yes,No" }}</td>
             <td>
                 <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>
                 <a href="{% url 'table_delete' module.id table.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this table?')">Delete</a>

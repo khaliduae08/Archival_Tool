@@ -3,8 +3,10 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
+
+from archival.core import archive_module, archive_table_batch
 from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection
-from .utils import run_test_script
+from .utils import get_connection, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date
 from django.contrib.auth.decorators import login_required
@@ -193,9 +195,63 @@ def get_module_tables(request, module_id):
 def run_table_script(request, table_id):
     if request.method == 'POST':
         table = get_object_or_404(ArchivalTable, id=table_id)
-        archival_date = request.POST.get('archival_date')  # can be used later
-        result = run_test_script(table)  # your test logic
+        archival_date = request.POST.get('archival_date')
+        if not archival_date:
+            return JsonResponse({'status': 'error', 'error': 'No archival date provided'}, status=400)
+                
+        result = archive_table_batch(table, archival_date)
+        print (f"Script execution result for table {table.table_name}: {result}")
         return JsonResponse(result)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+@login_required
+def complete_archival(request, module_id):
+    if request.method == 'POST':
+        archival_date = request.POST.get('archival_date')
+    if not archival_date:
+        return JsonResponse({'status': 'error', 'error': 'No date provided'}, status=400)
+    result = archive_module(module_id, archival_date)
+    return JsonResponse(result)
+
+@login_required
+def get_table_count(request, table_id):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    table = get_object_or_404(ArchivalTable, id=table_id)
+    archival_date = request.GET.get('archival_date')
+    if not archival_date:
+        return JsonResponse({'error': 'No archival date provided'}, status=400)
+
+    select_sql = table.select_script.format(archival_date=archival_date)    
+    count_sql = f"SELECT COUNT(*) FROM ({select_sql}) AS subquery"
+
+    app = table.module.application
+    try:
+        src_conn = get_connection(app.src_conn.name)
+        with src_conn.cursor() as cursor:
+            cursor.execute(count_sql)
+            count = cursor.fetchone()[0]
+        src_conn.close()
+        return JsonResponse({'status': 'success', 'count': count})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
+
+@csrf_exempt
+def update_module_date(request, module_id):
+    if request.method == 'POST':
+        module = get_object_or_404(ArchivalModule, id=module_id)
+        date_str = request.POST.get('archival_date')
+        if date_str:
+            parsed_date = parse_date(date_str)
+            if parsed_date:
+                module.last_archival_date = parsed_date
+                module.save()
+                return JsonResponse({'status': 'success', 'new_date': date_str})
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'No date'}, status=400)
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 # ----- Connection Management -----
@@ -265,6 +321,7 @@ def application_add(request):
         select_session = request.POST.get('select_session')
         target_session = request.POST.get('target_session')
         transfer_method = request.POST.get('transfer_method')
+        max_date = request.POST.get('max_date')
         app = Application.objects.create(
             name=name,
             src_conn_id=source_id or None,
@@ -273,6 +330,7 @@ def application_add(request):
             select_session=select_session,
             target_session=target_session,
             transfer_method=transfer_method,
+            max_date=max_date
         )
         messages.success(request, 'Application added.')
         return redirect('application_list')
@@ -296,6 +354,7 @@ def application_edit(request, pk):
         app.select_session = request.POST.get('select_session')
         app.target_session = request.POST.get('target_session')
         app.transfer_method = request.POST.get('transfer_method')
+        app.max_date = request.POST.get('max_date')
         app.save()
         messages.success(request, 'Application updated.')
         return redirect('application_list')
@@ -382,7 +441,9 @@ def table_add(request, module_id):
             sequence=request.POST.get('sequence'),
             select_script=request.POST.get('select_script'),
             insert_script=request.POST.get('insert_script'),
-            delete_script=request.POST.get('delete_script')
+            delete_script=request.POST.get('delete_script'),
+            acct_sum=request.POST.get('acct_sum'),
+            identity_insert=request.POST.get('identity_insert') == 'on'
         )
         messages.success(request, 'Table added.')
         return redirect('table_list', module_id=module.id)
@@ -397,7 +458,10 @@ def table_edit(request, module_id, pk):
         table.select_script = request.POST.get('select_script')
         table.insert_script = request.POST.get('insert_script')
         table.delete_script = request.POST.get('delete_script')
+        table.acct_sum = request.POST.get('acct_sum')
+        table.identity_insert = request.POST.get('identity_insert') == 'on'
         table.save()
+        print(f"Updated table: {table.table_name}, acct_sum: {table.acct_sum}, identity_insert: {table.identity_insert}")
         messages.success(request, 'Table updated.')
         return redirect('table_list', module_id=module_id)
     return render(request, 'archival/table_form.html', {'module': table.module, 'table': table, 'action': 'Edit'})

@@ -1,7 +1,7 @@
 {% extends "archival/base.html" %}
 
 {% block content %}
-{% for module in modules %}
+
 <h2 class="h4 mb-3">Manage Module: {{ app.name }}</h2>
 <a href="{% url 'module_add' app.id %}" class="btn btn-success mb-3">Add New Module</a>
 <table class="table table-bordered">
@@ -13,7 +13,7 @@
         </tr>
     </thead>
     <tbody>
-        
+        {% for module in modules %}
         <tr>
             <td>{{ module.name }}</td>
             <td>{{ module.last_archival_date|default:"Never" }}</td>

@@ -119,86 +119,216 @@
         }
         const csrftoken = getCookie('csrftoken');
 
-        // Global startProcess function (called from home.html)
-        function startProcess(button, moduleId, moduleName, archivalDate) {
-            $('#progressModalLabel').text('Archival Progress - ' + moduleName + ' (Date: ' + archivalDate + ')');
-            $('#progressContent').html('<p>Loading tables...</p>');
-            var modal = new bootstrap.Modal(document.getElementById('progressModal'));
-            modal.show();
+    function startProcess(button, moduleId, moduleName, archivalDate) {
+    $('#progressModalLabel').text('Archival Progress - ' + moduleName + ' (Date: ' + archivalDate + ')');
+    $('#progressContent').html('<p>Loading tables...</p>');
+    var modal = new bootstrap.Modal(document.getElementById('progressModal'));
+    modal.show();
 
-            $.getJSON('/api/get_tables/' + moduleId + '/', function(tables) {
-                if (tables.length === 0) {
-                    $('#progressContent').html('<p>No tables configured for this module.</p>');
+    $.getJSON('/api/get_tables/' + moduleId + '/', function(tables) {
+        if (tables.length === 0) {
+            $('#progressContent').html('<p>No tables configured for this module.</p>');
+            return;
+        }
+
+        // Build table with three columns: Table, Count, Status
+        var html = '<table class="table table-sm">';
+        html += '<thead><tr><th>Table</th><th>Count</th><th>Status</th></tr></thead><tbody>';
+        tables.forEach(function(t) {
+            html += '<tr id="table-' + t.id + '">';
+            html += '<td>' + t.table_name + '</td>';
+            html += '<td id="count-' + t.id + '">—</td>';
+            html += '<td><span class="badge bg-secondary" id="status-' + t.id + '">Pending</span></td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        $('#progressContent').html(html);
+
+        // Step 1: Get counts for each table
+        var countPromises = [];
+        tables.forEach(function(t) {
+            var countCell = $('#count-' + t.id);
+            var statusSpan = $('#status-' + t.id);
+            statusSpan.removeClass('bg-secondary').addClass('bg-info').text('Counting...');
+            var promise = $.getJSON('/api/count_table/' + t.id + '/', { archival_date: archivalDate })
+                .done(function(data) {
+                    if (data.status === 'success') {
+                        countCell.text(data.count);
+                        t.count = data.count;
+                        statusSpan.removeClass('bg-info').addClass('bg-secondary').text('Pending');
+                    } else {
+                        countCell.text('Error');
+                        statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
+                        t.count = 0;
+                    }
+                })
+                .fail(function() {
+                    countCell.text('Error');
+                    statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
+                    t.count = 0;
+                });
+            countPromises.push(promise);
+        });
+
+        // After all counts are ready, start archival sequentially
+        $.when.apply($, countPromises).then(function() {
+            var index = 0;
+            var totalSuccess = true;
+
+            function runNext() {
+                console.log('runNext called, index =', index, 'total tables =', tables.length);
+                if (index >= tables.length) {
+                    console.log('All tables processed. totalSuccess =', totalSuccess);
+                    if (totalSuccess) {
+                        $.ajax({
+                            url: '/api/update_module_date/' + moduleId + '/',
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': csrftoken },
+                            data: { archival_date: archivalDate },
+                            success: function() {
+                                console.log('Module last archival date updated to ' + archivalDate);
+                                button.setAttribute('data-last', archivalDate);
+                                $(button).closest('tr').find('td:eq(1)').text(archivalDate);
+                            }
+                        });
+                    }
                     return;
                 }
-                var html = '<table class="table table-sm"><thead><tr><th>Table</th><th>Status</th></tr></thead><tbody>';
-                tables.forEach(function(t) {
-                    html += '<tr id="table-' + t.id + '"><td>' + t.table_name + '</td><td><span class="badge bg-secondary">Pending</span></td></tr>';
-                });
-                html += '</tbody></table>';
-                $('#progressContent').html(html);
 
-                var index = 0;
-                var totalSuccess = true;
+                var table = tables[index];
+                var statusSpan = $('#status-' + table.id);
+                statusSpan.removeClass('bg-secondary').addClass('bg-warning').text('Running...');
 
-                function runNext() {
-                    if (index >= tables.length) {
-                        // All scripts finished – update module date if everything succeeded
-                        if (totalSuccess) {
-                            $.ajax({
-                                url: '/api/update_module_date/' + moduleId + '/',
-                                method: 'POST',
-                                headers: {'X-CSRFToken': csrftoken},
-                                data: { archival_date: archivalDate },
-                                success: function(response) {
-                                    console.log('Module last archival date updated to ' + archivalDate);
-                                    // Update the button's data-last and table cell
-                                    button.setAttribute('data-last', archivalDate);
-                                    $(button).closest('tr').find('td:eq(1)').text(archivalDate);
-                                },
-                                error: function(xhr) {
-                                    console.error('Failed to update module date. Status:', xhr.status);
-                                }
-                            });
-                        }
-                        return;
-                    }
-
-                    var table = tables[index];
-                    var row = $('#table-' + table.id);
-                    row.find('td:last').html('<span class="badge bg-warning">Running...</span>');
-
-                    $.ajax({
-                        url: '/api/run_script/' + table.id + '/',
-                        method: 'POST',
-                        headers: {'X-CSRFToken': csrftoken},
-                        data: { archival_date: archivalDate },
-                        print: function() {
-                            console.log('Running script for date ' + archivalDate);
-                        },
-                        success: function(response) {
-                            if (response.status === 'success') {
-                                row.find('td:last').html('<span class="badge bg-success">Success</span>');
-                            } else {
-                                row.find('td:last').html('<span class="badge bg-danger">Error</span>');
-                                totalSuccess = false;
-                            }
-                        },
-                        error: function() {
-                            row.find('td:last').html('<span class="badge bg-danger">Error</span>');
-                            totalSuccess = false;
-                        },
-                        complete: function() {
+                $.ajax({
+                    url: '/api/run_script/' + table.id + '/',
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrftoken },
+                    data: { archival_date: archivalDate },
+                    success: function(response) {
+                        console.log('Response for', table.table_name, response);
+                        if (response.status === 'success') {
+                            var rows = response.rows_archived || 0;
+                            console.log(`Script execution result for table ${table.table_name}: ${rows} rows archived.`);
+                            statusSpan.removeClass().addClass('badge bg-success').text('Success');
+                            
+                            $('#count-' + table.id).text(rows + ' / ' + (table.count || 0));
                             index++;
                             runNext();
+                        } else {
+                            statusSpan.removeClass().addClass('badge bg-danger').text('Error');
+                            totalSuccess = false;
+                            console.log('Table failed, stopping process');
                         }
-                    });
-                }
-                runNext();
-            }).fail(function() {
-                $('#progressContent').html('<p class="text-danger">Failed to load tables.</p>');
-            });
-        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('AJAX error for', table.table_name, status, error);
+                        statusSpan.removeClass().addClass('badge bg-danger').text('Error');
+                        totalSuccess = false;
+                        // Do NOT call runNext – stop
+                    }
+                });
+            }
+
+            runNext();
+        });
+    }).fail(function() {
+        $('#progressContent').html('<p class="text-danger">Failed to load tables.</p>');
+    });
+}
+
+        // // Global startProcess function (called from home.html)
+        // function startProcess(button, moduleId, moduleName, archivalDate) {
+        //     $('#progressModalLabel').text('Archival Progress - ' + moduleName + ' (Date: ' + archivalDate + ')');
+        //     $('#progressContent').html('<p>Loading tables...</p>');
+        //     var modal = new bootstrap.Modal(document.getElementById('progressModal'));
+        //     modal.show();
+
+        //     $.getJSON('/api/get_tables/' + moduleId + '/', function(tables) {
+        //         if (tables.length === 0) {
+        //             $('#progressContent').html('<p>No tables configured for this module.</p>');
+        //             return;
+        //         }
+        //         var html = '<table class="table table-sm"><thead><tr><th>Table</th><th>Status</th></tr></thead><tbody>';
+        //         tables.forEach(function(t) {
+        //             html += '<tr id="table-' + t.id + '"><td>' + t.table_name + '</td><td><span class="badge bg-secondary">Pending</span></td></tr>';
+        //         });
+        //         html += '</tbody></table>';
+        //         $('#progressContent').html(html);
+
+        //         var index = 0;
+        //         var totalSuccess = true;
+
+        //         function runNext() {
+        //             if (index >= tables.length) {
+        //                 $.ajax({
+        //                     url: '/api/complete_archival/' + moduleId + '/',
+        //                     method: 'POST',
+        //                     headers: {'X-CSRFToken': csrftoken},
+        //                     data: { archival_date: archivalDate },
+        //                     success: function(response) {
+        //                         console.log('Archival process completed for module ' + moduleId);
+        //                     },
+        //                     error: function(xhr) {
+        //                         console.error('Failed to complete archival process. Status:', xhr.status);
+        //                     }
+        //                 });
+        //                 // All scripts finished – update module date if everything succeeded
+        //                 console.log('Updating module', moduleId, 'with date', archivalDate);
+        //                 if (totalSuccess) {                            
+        //                     $.ajax({
+        //                         url: '/api/update_module_date/' + moduleId + '/',
+        //                         method: 'POST',
+        //                         headers: {'X-CSRFToken': csrftoken},
+        //                         data: { archival_date: archivalDate },
+        //                         success: function(response) {
+        //                             console.log('Module last archival date updated to ' + archivalDate);
+        //                             // Update the button's data-last and table cell
+        //                             button.setAttribute('data-last', archivalDate);
+        //                             $(button).closest('tr').find('td:eq(1)').text(archivalDate);
+        //                         },
+        //                         error: function(xhr) {
+        //                             console.error('Failed to update module date. Status:', xhr.status);
+        //                         }
+        //                     });
+        //                 }
+        //                 return;
+        //             }
+
+        //             var table = tables[index];
+        //             var row = $('#table-' + table.id);
+        //             row.find('td:last').html('<span class="badge bg-warning">Running...</span>');
+
+        //             $.ajax({
+        //                 url: '/api/run_script/' + table.id + '/',
+        //                 method: 'POST',
+        //                 headers: {'X-CSRFToken': csrftoken},
+        //                 data: { archival_date: archivalDate },
+        //                 print: function() {
+        //                     console.log('Running script for date ' + archivalDate);
+        //                 },
+        //                 success: function(response) {
+        //                     if (response.status === 'success') {
+        //                         row.find('td:last').html('<span class="badge bg-success">Success</span>');
+        //                     } else {
+        //                         row.find('td:last').html('<span class="badge bg-danger">Error</span>');
+        //                         totalSuccess = false;
+        //                     }
+        //                 },
+        //                 error: function() {
+        //                     row.find('td:last').html('<span class="badge bg-danger">Error</span>');
+        //                     totalSuccess = false;
+        //                 },
+        //                 complete: function() {
+        //                     index++;
+        //                     runNext();
+        //                 }
+        //             });
+        //         }
+        //         runNext();
+        //     }).fail(function() {
+        //         $('#progressContent').html('<p class="text-danger">Failed to load tables.</p>');
+        //     });
+        // }
     </script>
 </body>
 </html>

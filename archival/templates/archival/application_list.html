@@ -13,6 +13,7 @@
             <th>Select Sessions</th>
             <th>Target Sessions</th>
             <th>Upload Type</th>
+            <th>Max Date</th>
             <th>Actions</th>
         </thead>
     <tbody>
@@ -25,6 +26,7 @@
             <td>{{ app.select_session }}</td>
             <td>{{ app.target_session }}</td>
             <td>{{ app.transfer_method }}</td>
+            <td>{{ app.max_date|default:'Not set' }}</td>
             <td>
                 <a href="{% url 'module_list' app.id %}" class="btn btn-sm btn-info">Modules</a>
                 <a href="{% url 'application_edit' app.id %}" class="btn btn-sm btn-warning">Edit</a>

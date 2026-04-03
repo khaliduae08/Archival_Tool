@@ -33,6 +33,7 @@
                                 <button class="btn btn-primary btn-sm" 
                                         data-module-id="{{ module.id }}"
                                         data-last="{% if module.last_archival_date %}{{ module.last_archival_date|date:'Y-m-d' }}{% endif %}"
+                                        data-max="{% if apps.max_date %}{{ apps.max_date|date:'Y-m-d' }}{% endif %}"
                                         onclick="processModule(this, {{ module.id }}, '{{ module.name|escapejs }}')">
                                     Process
                                 </button>
@@ -66,6 +67,15 @@ function processModule(button, moduleId, moduleName) {
         var lastDate = new Date(lastArchivalStr + 'T00:00:00');
         if (selectedDate <= lastDate) {
             alert('New archival date must be newer than the last archival date (' + lastArchivalStr + ').');
+            return;
+        }
+    }
+
+    var maxDateStr = button.getAttribute('data-max');
+    if (maxDateStr) {
+        var maxDate = new Date(maxDateStr + 'T00:00:00');
+        if (selectedDate > maxDate) {
+            alert('Selected date cannot be later than the application\'s max date (' + maxDateStr + ').');
             return;
         }
     }

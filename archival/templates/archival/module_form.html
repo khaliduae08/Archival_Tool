@@ -11,7 +11,7 @@
     <div class="mb-3">
         <label>Last Archival Date</label>
         {% if module.last_archival_date %}
-            <input type="text" class="form-control" value="{{ module.last_archival_date|date:'Y-m-d H:i' }}" readonly>
+            <input type="text" class="form-control" value="{{ module.last_archival_date|date:'Y-m-d' }}" readonly>
         {% else %}
             <input type="text" class="form-control" value="No archival done yet" readonly>
         {% endif %}
