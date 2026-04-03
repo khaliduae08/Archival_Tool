@@ -120,6 +120,8 @@
         const csrftoken = getCookie('csrftoken');
 
     function startProcess(button, moduleId, moduleName, archivalDate) {
+    const overallStart = Date.now();
+
     $('#progressModalLabel').text('Archival Progress - ' + moduleName + ' (Date: ' + archivalDate + ')');
     $('#progressContent').html('<p>Loading tables...</p>');
     var modal = new bootstrap.Modal(document.getElementById('progressModal'));
@@ -131,17 +133,19 @@
             return;
         }
 
-        // Build table with three columns: Table, Count, Status
+        // Build table with four columns: Table, Count, Status, Time
         var html = '<table class="table table-sm">';
-        html += '<thead><tr><th>Table</th><th>Count</th><th>Status</th></tr></thead><tbody>';
+        html += '<thead><tr><th>Table</th><th>Count</th><th>Status</th><th>Time (s)</th></tr></thead><tbody>';
         tables.forEach(function(t) {
             html += '<tr id="table-' + t.id + '">';
             html += '<td>' + t.table_name + '</td>';
             html += '<td id="count-' + t.id + '">—</td>';
             html += '<td><span class="badge bg-secondary" id="status-' + t.id + '">Pending</span></td>';
+            html += '<td id="time-' + t.id + '">—</td>';
             html += '</tr>';
         });
         html += '</tbody></table>';
+        html += '<div id="total-time" class="mt-2 fw-bold"></div>';
         $('#progressContent').html(html);
 
         // Step 1: Get counts for each table
@@ -176,9 +180,9 @@
             var totalSuccess = true;
 
             function runNext() {
-                console.log('runNext called, index =', index, 'total tables =', tables.length);
                 if (index >= tables.length) {
-                    console.log('All tables processed. totalSuccess =', totalSuccess);
+                    const totalSeconds = ((Date.now() - overallStart) / 1000).toFixed(2);
+                    $('#total-time').text(`Total archival time: ${totalSeconds} seconds`);
                     if (totalSuccess) {
                         $.ajax({
                             url: '/api/update_module_date/' + moduleId + '/',
@@ -197,7 +201,9 @@
 
                 var table = tables[index];
                 var statusSpan = $('#status-' + table.id);
+                var timeCell = $('#time-' + table.id);
                 statusSpan.removeClass('bg-secondary').addClass('bg-warning').text('Running...');
+                var tableStart = Date.now();
 
                 $.ajax({
                     url: '/api/run_script/' + table.id + '/',
@@ -205,26 +211,26 @@
                     headers: { 'X-CSRFToken': csrftoken },
                     data: { archival_date: archivalDate },
                     success: function(response) {
-                        console.log('Response for', table.table_name, response);
+                        const elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
+                        timeCell.text(elapsed);
                         if (response.status === 'success') {
                             var rows = response.rows_archived || 0;
-                            console.log(`Script execution result for table ${table.table_name}: ${rows} rows archived.`);
                             statusSpan.removeClass().addClass('badge bg-success').text('Success');
-                            
                             $('#count-' + table.id).text(rows + ' / ' + (table.count || 0));
                             index++;
                             runNext();
                         } else {
                             statusSpan.removeClass().addClass('badge bg-danger').text('Error');
                             totalSuccess = false;
-                            console.log('Table failed, stopping process');
+                            // Stop: do not call runNext
                         }
                     },
-                    error: function(xhr, status, error) {
-                        console.error('AJAX error for', table.table_name, status, error);
+                    error: function() {
+                        const elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
+                        timeCell.text(elapsed);
                         statusSpan.removeClass().addClass('badge bg-danger').text('Error');
                         totalSuccess = false;
-                        // Do NOT call runNext – stop
+                        // Stop
                     }
                 });
             }
