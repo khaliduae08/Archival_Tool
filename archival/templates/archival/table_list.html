@@ -14,7 +14,7 @@
             <th>Insert Script</th>
             <th>Delete Script</th>
             <th>Account Summary</th>
-            <th>Identity Insert</th>
+            <!-- <th>Identity Insert</th> -->
             <th>Actions</th>
         </tr>
     </thead>
@@ -27,7 +27,7 @@
             <td><pre>{{ table.insert_script|truncatechars:35 }}</pre></td>
             <td><pre>{{ table.delete_script|truncatechars:35 }}</pre></td>
             <td>{{ table.acct_sum }}</td>
-            <td>{{ table.identity_insert|yesno:"Yes,No" }}</td>
+            <!-- <td>{{ table.identity_insert|yesno:"Yes,No" }}</td> -->
             <td>
                 {% if user.is_superuser or user.groups.all.0.name == 'admin'%}
                     <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>

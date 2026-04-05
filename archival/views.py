@@ -371,7 +371,7 @@ def table_add(request, module_id):
             insert_script=request.POST.get('insert_script'),
             delete_script=request.POST.get('delete_script'),
             acct_sum=request.POST.get('acct_sum'),
-            identity_insert=request.POST.get('identity_insert') == 'on'
+            # identity_insert=request.POST.get('identity_insert') == 'on'
         )
         messages.success(request, 'Table added.')
         return redirect('table_list', module_id=module.id)
@@ -387,9 +387,9 @@ def table_edit(request, module_id, pk):
         table.insert_script = request.POST.get('insert_script')
         table.delete_script = request.POST.get('delete_script')
         table.acct_sum = request.POST.get('acct_sum')
-        table.identity_insert = request.POST.get('identity_insert') == 'on'
+        # table.identity_insert = request.POST.get('identity_insert') == 'on'
         table.save()
-        print(f"Updated table: {table.table_name}, acct_sum: {table.acct_sum}, identity_insert: {table.identity_insert}")
+        # print(f"Updated table: {table.table_name}, acct_sum: {table.acct_sum}, identity_insert: {table.identity_insert}")
         messages.success(request, 'Table updated.')
         return redirect('table_list', module_id=module_id)
     return render(request, 'archival/table_form.html', {'module': table.module, 'table': table, 'action': 'Edit'})
