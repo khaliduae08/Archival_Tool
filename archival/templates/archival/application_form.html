@@ -13,7 +13,7 @@
         <select name="src_conn" class="form-select">
             <option value="">-- Select --</option>
             {% for conn in sources %}
-                <option value="{{ conn.id }}" {% if app.src_conn.id == conn.id %}selected{% endif %}>{{ conn }}</option>
+                <option value="{{ conn.id }}" {% if app and app.src_conn.id == conn.id %}selected{% endif %}>{{ conn }}</option>
             {% endfor %}
         </select>
     </div>
@@ -22,7 +22,7 @@
         <select name="dstn_conn" class="form-select">
             <option value="">-- Select --</option>
             {% for conn in dests %}
-                <option value="{{ conn.id }}" {% if app.dstn_conn.id == conn.id %}selected{% endif %}>{{ conn}}</option>
+                <option value="{{ conn.id }}" {% if app and app.dstn_conn.id == conn.id %}selected{% endif %}>{{ conn }}</option>
             {% endfor %}
         </select>
     </div>

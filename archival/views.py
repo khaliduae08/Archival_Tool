@@ -307,7 +307,8 @@ def connection_delete(request, pk):
 @login_required
 def application_list(request):
     apps = Application.objects.all()
-    return render(request, 'archival/application_list.html', {'apps': apps})
+    connection = DatabaseConnection.objects.all()
+    return render(request, 'archival/application_list.html', {'apps': apps, 'connections': connection})
 
 @login_required
 def application_add(request):
@@ -332,12 +333,11 @@ def application_add(request):
         )
         messages.success(request, 'Application added.')
         return redirect('application_list')
-    sources = DatabaseConnection.objects.filter(name='source')
-    dests = DatabaseConnection.objects.filter(name='destination')
+    conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
         'action': 'Add',
-        'sources': sources,
-        'dests': dests,
+        'sources': conns,
+        'dests': conns,
         'transfer_choices': Application.TRANSFER_CHOICES
     })
 
