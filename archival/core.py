@@ -1,7 +1,7 @@
 import logging
 import uuid
 from django.db import connection
-from .models import ArchivalTable,ArchivalModule
+from .models import ArchivalTable,ArchivalModule, TempArchivalIds
 from .utils import get_connection
 
 
@@ -59,20 +59,24 @@ def archive_table_batch(table, archival_date):
 
         
         insert_sql = table.insert_script
-        delete_sql = table.delete_script
+        delete_sql = table.delete_script            
+
+        if table.delete_script:
+            if '{archival_date}' in delete_sql:
+                delete_sql = delete_sql.format(archival_date=archival_date)
+
         if '{archival_date}' in insert_sql:
             insert_sql = insert_sql.format(archival_date=archival_date)
-        if '{archival_date}' in delete_sql:
-            delete_sql = delete_sql.format(archival_date=archival_date)
 
         final_insert = insert_sql.replace(
             "IN ({ids})",
             f"IN (SELECT RECID FROM {temp_table_name})"
         )
-        final_delete = delete_sql.replace(
-            "IN ({ids})",
-            f"IN (SELECT RECID FROM {temp_table_name})"
-        )
+        if delete_sql:
+            final_delete = delete_sql.replace(
+                "IN ({ids})",
+                f"IN (SELECT RECID FROM {temp_table_name})"
+            )
 
         with src_conn.cursor() as cur:
             cur.execute(final_insert)
@@ -86,7 +90,7 @@ def archive_table_batch(table, archival_date):
                                         ,IS_ACTIVE,SESSION_ID,SESSION_CODE,CREATED_BY,CREATED_ON)  
                                         SELECT TOP 1 '{app_name}_ARCHIVAL','{app_name}_ARCHIVAL','00002','00003','00004','{app_name} ARCHIVAL',0,1,'574805','{app_name}ARCHIVALSESSION',47,getdate()  
                                         where not exists (SELECT 1 FROM [TRAN] WHERE TRAN_NAME='{app_name}_ARCHIVAL')"""
-            print(insert_tran_type_code)
+            # print(insert_tran_type_code)
             with src_conn.cursor() as cur:
                 cur.execute(insert_tran_type_code)                               
                 tran_type_code = cur.execute(get_tran_type_code).fetchone()[0]
@@ -129,9 +133,10 @@ def archive_table_batch(table, archival_date):
                 cur.execute(agg_insert_sql)
                 src_conn.commit()        
 
-            with src_conn.cursor() as cur:
-                        cur.execute(final_delete)
-                        src_conn.commit()
+            if final_delete:
+                with src_conn.cursor() as cur:
+                            cur.execute(final_delete)
+                            src_conn.commit()
 
             agg_acct_tran=f"""MERGE ACCT_TRAN AS TARGET USING (SELECT    
                 TOTAL_AMNT AS AMNT, TOTAL_AMNT_BASE AS AMNT_BASE_CRCY,  TOTAL_AMNT_FRGN AS AMNT_FRGN_CRCY,'00000' AS AMNT_TYPE_CODE,TOTAL_AMNT_BASE/replace(isnull(TOTAL_AMNT,1),0,1) AS XCHG_RATE,    
@@ -164,14 +169,15 @@ def archive_table_batch(table, archival_date):
                 cur.execute(agg_acct_tran)
                 src_conn.commit()
 
-        final_delete = delete_sql.replace(
-            "IN ({ids})",
-            f"IN (SELECT RECID FROM {temp_table_name})"
-            )
+        if delete_sql:
+            final_delete = delete_sql.replace(
+                "IN ({ids})",
+                f"IN (SELECT RECID FROM {temp_table_name})"
+                )
 
-        with src_conn.cursor() as src_cursor:
-            src_cursor.execute(final_delete)
-            src_conn.commit() 
+            with src_conn.cursor() as src_cursor:
+                src_cursor.execute(final_delete)
+                src_conn.commit() 
 
         with src_conn.cursor() as cur:
             cur.execute(f"SELECT COUNT(*) FROM {temp_table_name}")

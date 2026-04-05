@@ -95,3 +95,12 @@ class ArchivalTransactionDetail(models.Model):
     
     def __str__(self):
         return f"{self.transaction.module.name} - {self.table_name}"
+    
+
+
+class TempArchivalIds(models.Model):
+    run_id = models.CharField(max_length=100)  # unique per archival run
+    module_id = models.IntegerField()
+    table_name = models.CharField(max_length=200)
+    archived_ids = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)

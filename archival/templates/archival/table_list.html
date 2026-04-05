@@ -2,7 +2,9 @@
 
 {% block content %}
 <h2 class="h4 mb-3">Tables for Module: {{ module.name }}</h2>
+{% if user.is_superuser or user.groups.all.0.name == 'admin'%}
 <a href="{% url 'table_add' module.id %}" class="btn btn-success mb-3">Add New Table</a>
+{% endif %}
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -27,8 +29,10 @@
             <td>{{ table.acct_sum }}</td>
             <td>{{ table.identity_insert|yesno:"Yes,No" }}</td>
             <td>
-                <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>
-                <a href="{% url 'table_delete' module.id table.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this table?')">Delete</a>
+                {% if user.is_superuser or user.groups.all.0.name == 'admin'%}
+                    <a href="{% url 'table_edit' module.id table.id %}" class="btn btn-sm btn-warning">Edit</a>
+                    <a href="{% url 'table_delete' module.id table.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this table?')">Delete</a>
+                {% endif %}
             </td>
         </tr>
         {% endfor %}

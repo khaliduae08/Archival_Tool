@@ -1,11 +1,12 @@
 import json
+import uuid
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 
 from archival.core import archive_module, archive_table_batch
-from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
+from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail, TempArchivalIds
 from .utils import get_connection, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date
@@ -183,76 +184,6 @@ def home(request):
         'tables': tables,
     })
 
-@login_required
-def get_module_tables(request, module_id):
-    """Return list of tables for a module (used in popup)."""
-    module = get_object_or_404(ArchivalModule, id=module_id)
-    tables = module.tables.all().values('id', 'table_name', 'sequence')
-    return JsonResponse(list(tables), safe=False)
-
-@csrf_exempt
-@login_required
-def run_table_script(request, table_id):
-    if request.method == 'POST':
-        table = get_object_or_404(ArchivalTable, id=table_id)
-        archival_date = request.POST.get('archival_date')
-        if not archival_date:
-            return JsonResponse({'status': 'error', 'error': 'No archival date provided'}, status=400)
-                
-        result = archive_table_batch(table, archival_date)
-        print (f"Script execution result for table {table.table_name}: {result}")
-        return JsonResponse(result)
-    
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
-
-@csrf_exempt
-@login_required
-def complete_archival(request, module_id):
-    if request.method == 'POST':
-        archival_date = request.POST.get('archival_date')
-    if not archival_date:
-        return JsonResponse({'status': 'error', 'error': 'No date provided'}, status=400)
-    result = archive_module(module_id, archival_date)
-    return JsonResponse(result)
-
-@login_required
-def get_table_count(request, table_id):
-    if request.method != 'GET':
-        return JsonResponse({'error': 'Method not allowed'}, status=405)
-    table = get_object_or_404(ArchivalTable, id=table_id)
-    archival_date = request.GET.get('archival_date')
-    if not archival_date:
-        return JsonResponse({'error': 'No archival date provided'}, status=400)
-
-    select_sql = table.select_script.format(archival_date=archival_date)    
-    count_sql = f"SELECT COUNT(*) FROM ({select_sql}) AS subquery"
-
-    app = table.module.application
-    try:
-        src_conn = get_connection(app.src_conn.name)
-        with src_conn.cursor() as cursor:
-            cursor.execute(count_sql)
-            count = cursor.fetchone()[0]
-        src_conn.close()
-        return JsonResponse({'status': 'success', 'count': count})
-    except Exception as e:
-        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
-
-@csrf_exempt
-def update_module_date(request, module_id):
-    if request.method == 'POST':
-        module = get_object_or_404(ArchivalModule, id=module_id)
-        date_str = request.POST.get('archival_date')
-        if date_str:
-            parsed_date = parse_date(date_str)
-            if parsed_date:
-                module.last_archival_date = parsed_date
-                module.save()
-                return JsonResponse({'status': 'success', 'new_date': date_str})
-            else:
-                return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)
-        return JsonResponse({'status': 'error', 'message': 'No date'}, status=400)
-    return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 # ----- Connection Management -----
 @login_required
@@ -356,13 +287,12 @@ def application_edit(request, pk):
         app.save()
         messages.success(request, 'Application updated.')
         return redirect('application_list')
-    sources = DatabaseConnection.objects.filter(name='source')
-    dests = DatabaseConnection.objects.filter(name='destination')
+    conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
         'action': 'Edit',
         'app': app,
-        'sources': sources,
-        'dests': dests,
+        'sources': conns,
+        'dests': conns,
         'transfer_choices': Application.TRANSFER_CHOICES
     })
 
@@ -472,45 +402,115 @@ def table_delete(request, module_id, pk):
     return redirect('table_list', module_id=module_id)
 
 
+@login_required
+def get_module_tables(request, module_id):    
+    module = get_object_or_404(ArchivalModule, id=module_id)
+    tables = module.tables.all().values('id', 'table_name', 'sequence')
+    return JsonResponse(list(tables), safe=False)
+
+@csrf_exempt
+@login_required
+def run_table_script(request, table_id):
+    if request.method == 'POST':
+        table = get_object_or_404(ArchivalTable, id=table_id)
+        archival_date = request.POST.get('archival_date')
+        if not archival_date:
+            return JsonResponse({'status': 'error', 'error': 'No archival date provided'}, status=400)
+
+        result = archive_table_batch(table, archival_date)
+        # print (f"Script execution result for table {table.table_name}: {result}")
+        return JsonResponse(result)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+@login_required
+def complete_archival(request, module_id):
+    if request.method == 'POST':
+        archival_date = request.POST.get('archival_date')
+    if not archival_date:
+        return JsonResponse({'status': 'error', 'error': 'No date provided'}, status=400)
+    result = archive_module(module_id, archival_date)
+    return JsonResponse(result)
+
+@login_required
+def get_table_count(request, table_id):
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    table = get_object_or_404(ArchivalTable, id=table_id)
+    archival_date = request.GET.get('archival_date')
+    if not archival_date:
+        return JsonResponse({'error': 'No archival date provided'}, status=400)
+
+    select_sql = table.select_script.format(archival_date=archival_date)    
+    count_sql = f"SELECT COUNT(*) FROM ({select_sql}) AS subquery"
+
+    app = table.module.application
+    try:
+        src_conn = get_connection(app.src_conn.name)
+        with src_conn.cursor() as cursor:
+            cursor.execute(count_sql)
+            count = cursor.fetchone()[0]
+        src_conn.close()
+        return JsonResponse({'status': 'success', 'count': count})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
+
+@csrf_exempt
+def update_module_date(request, module_id):
+    if request.method == 'POST':
+        module = get_object_or_404(ArchivalModule, id=module_id)
+        date_str = request.POST.get('archival_date')
+        if date_str:
+            parsed_date = parse_date(date_str)
+            if parsed_date:
+                module.last_archival_date = parsed_date
+                module.save()
+                return JsonResponse({'status': 'success', 'new_date': date_str})
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)
+        return JsonResponse({'status': 'error', 'message': 'No date'}, status=400)
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
 # ----- Archival History -----
 @csrf_exempt
 @login_required
 def save_archival_history(request, module_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
     module = get_object_or_404(ArchivalModule, id=module_id)
     data = json.loads(request.body)
     archival_date = data.get('archival_date')
     total_time = data.get('total_time')
-    table_results = data.get('results', [])
-    
+    results = data.get('results', [])
     if not archival_date:
         return JsonResponse({'status': 'error', 'error': 'Missing archival_date'}, status=400)
-    
     transaction = ArchivalTransaction.objects.create(
         module=module,
-        userName=request.user.username,
         archival_date=archival_date,
         total_execution_time=total_time
     )
-    for res in table_results:
+    for res in results:
         ArchivalTransactionDetail.objects.create(
             transaction=transaction,
-            table_name=res['table_name'],
+            table_name=res.get('table_name', ''),
             row_count=res.get('row_count', 0),
             execution_time=res.get('execution_time', 0),
             status=res.get('status', 'unknown'),
             error_message=res.get('error_message', '')
         )
+
     return JsonResponse({'status': 'success'})
 
 def transaction_list(request):
     transactions = ArchivalTransaction.objects.all()
+    # print(transactions)
     return render(request, 'archival/Transaction.html', {'transactions': transactions})
 
 def transaction_detail(request, transaction_id):
     transaction = get_object_or_404(ArchivalTransaction, id=transaction_id)
     details = transaction.details.all()
-    return render(request, 'archival/transaction_detail.html', {'transaction': transaction, 'details': details})
+    # print(details)
+    return render(request, 'archival/transaction_details.html', {'transaction': transaction, 'details': details})
 

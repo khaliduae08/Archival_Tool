@@ -16,11 +16,11 @@
         {% for tran in transactions %}
         <tr>
             <td>{{ tran.module.name }}</td>
-            <td>{{ tran.user.username }}</td>
+            <td>{{ tran.userName }}</td>
             <td>{{ tran.archival_date }}</td>
             <td>{{ tran.total_execution_time }}</td>
             <td>
-                <a href="{% url 'transaction_list' tran.module.id %}" class="btn btn-sm btn-info">View</a>
+                <a href="{% url 'transaction_detail' tran.id %}" class="btn btn-sm btn-info">View</a>
             </td>
         </tr>
         {% empty %}
