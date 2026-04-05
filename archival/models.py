@@ -70,3 +70,28 @@ class ArchivalTable(models.Model):
     def __str__(self):
         return f"{self.module.name} - {self.table_name}"
     
+
+class ArchivalTransaction(models.Model):
+    module = models.ForeignKey(ArchivalModule, on_delete=models.CASCADE, related_name='transactions')
+    userName = models.CharField(max_length=150)
+    archival_date = models.DateField()
+    total_execution_time = models.FloatField(help_text="Total time in seconds")
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.module.name} - {self.archival_date}"
+
+class ArchivalTransactionDetail(models.Model):
+    transaction = models.ForeignKey(ArchivalTransaction, on_delete=models.CASCADE, related_name='details')
+    table_name = models.CharField(max_length=200)
+    row_count = models.IntegerField(default=0)
+    execution_time = models.FloatField(help_text="Time in seconds")
+    archived_ids = models.TextField(blank=True, null=True, help_text="Comma-separated list of IDs (or range)")
+    status = models.CharField(max_length=20, default='success')
+    error_message = models.TextField(blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.transaction.module.name} - {self.table_name}"

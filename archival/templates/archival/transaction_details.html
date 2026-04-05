@@ -1,0 +1,31 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2>Transactions Details</h2>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Table Name</th>
+            <th>Row Count</th>
+            <th>Execution Time</th>
+            <th>Archival Id</th>
+            <th>Status</th>
+            <th>Error Message</th>
+        </thead>
+    <tbody>
+        {% for det in details %}
+        <tr>
+            <td>{{ det.table.name }}</td>
+            <td>{{ det.row_count }}</td>
+            <td>{{ det.execution_time }}</td>
+            <td>{{ det.archival_id }}</td>
+            <td>{{ det.status }}</td>
+            <td>{{ det.error_message }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">No transactions done yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

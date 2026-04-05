@@ -1,0 +1,31 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2>Transactions History</h2>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Module</th>
+            <th>UserName</th>
+            <th>Archival Date</th>
+            <th>Total Execution Time</th>
+            <th>Actions</th>
+        </thead>
+    <tbody>
+        {% for tran in transactions %}
+        <tr>
+            <td>{{ tran.module.name }}</td>
+            <td>{{ tran.user.username }}</td>
+            <td>{{ tran.archival_date }}</td>
+            <td>{{ tran.total_execution_time }}</td>
+            <td>
+                <a href="{% url 'transaction_list' tran.module.id %}" class="btn btn-sm btn-info">View</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">No transactions done yet.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

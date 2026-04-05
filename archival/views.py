@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 
 from archival.core import archive_module, archive_table_batch
-from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection
+from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
 from .utils import get_connection, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date
@@ -473,4 +473,46 @@ def table_delete(request, module_id, pk):
     messages.success(request, 'Table deleted.')
     return redirect('table_list', module_id=module_id)
 
+
+# ----- Archival History -----
+@csrf_exempt
+@login_required
+def save_archival_history(request, module_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    module = get_object_or_404(ArchivalModule, id=module_id)
+    data = json.loads(request.body)
+    archival_date = data.get('archival_date')
+    total_time = data.get('total_time')
+    table_results = data.get('results', [])
+    
+    if not archival_date:
+        return JsonResponse({'status': 'error', 'error': 'Missing archival_date'}, status=400)
+    
+    transaction = ArchivalTransaction.objects.create(
+        module=module,
+        userName=request.user.username,
+        archival_date=archival_date,
+        total_execution_time=total_time
+    )
+    for res in table_results:
+        ArchivalTransactionDetail.objects.create(
+            transaction=transaction,
+            table_name=res['table_name'],
+            row_count=res.get('row_count', 0),
+            execution_time=res.get('execution_time', 0),
+            status=res.get('status', 'unknown'),
+            error_message=res.get('error_message', '')
+        )
+    return JsonResponse({'status': 'success'})
+
+def transaction_list(request):
+    transactions = ArchivalTransaction.objects.all()
+    return render(request, 'archival/Transaction.html', {'transactions': transactions})
+
+def transaction_detail(request, transaction_id):
+    transaction = get_object_or_404(ArchivalTransaction, id=transaction_id)
+    details = transaction.details.all()
+    return render(request, 'archival/transaction_detail.html', {'transaction': transaction, 'details': details})
 
