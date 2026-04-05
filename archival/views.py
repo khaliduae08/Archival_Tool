@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 
 from archival.core import archive_module, archive_table_batch
-from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail, TempArchivalIds
+from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
 from .utils import get_connection, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date

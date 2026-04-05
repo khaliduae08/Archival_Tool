@@ -1,7 +1,7 @@
 import logging
 import uuid
 from django.db import connection
-from .models import ArchivalTable,ArchivalModule, TempArchivalIds
+from .models import ArchivalTable,ArchivalModule
 from .utils import get_connection
 
 
