@@ -262,18 +262,16 @@ def connection_list(request):
 
 @login_required
 def connection_add(request):
-    if request.method == 'POST':
-        name = request.POST.get('name')
+    if request.method == 'POST':        
         server = request.POST.get('server')
         database = request.POST.get('database')
         username = request.POST.get('username')
         password = request.POST.get('password')
         # Validate required fields
-        if not all([name, server, database, username, password]):
+        if not all([server, database, username, password]):
             messages.error(request, 'All fields are required.')
             return redirect('connection_add')
         DatabaseConnection.objects.create(
-            name=name,
             server=server,
             database=database,
             username=username,
