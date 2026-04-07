@@ -28,7 +28,7 @@ def archive_module(module_id, archival_date):
     return {'status': 'success' if total_success else 'partial', 'results': results}
 
 def archive_table_batch(table, archival_date):
-    temp_table_name = f"#IDS_{table.table_name}_{uuid.uuid4().hex}"
+    temp_table_name = f"{table.table_name}1_{uuid.uuid4().hex}"
     app = table.module.application
     if not app.src_conn or not app.dstn_conn:
         return {'status': 'error', 'error': 'Missing source/destination connection'}
@@ -78,12 +78,14 @@ def archive_table_batch(table, archival_date):
                 f"IN (SELECT RECID FROM {temp_table_name})"
             )
 
+        src_conn.autocommit = False
+
         with src_conn.cursor() as cur:
             cur.execute(final_insert)
-            src_conn.commit()
+            # src_conn.commit()
         
         if table.acct_sum == 'Y':
-            temp_acct_tran=f"{table.table_name}_{uuid.uuid4().hex}"
+            temp_acct_tran=f"{table.table_name}2_{uuid.uuid4().hex}"
             app_name=table.module.application.name
             get_tran_type_code=f"""SELECT TRAN_ID FROM [TRAN] WHERE TRAN_NAME ='{app_name}_ARCHIVAL'"""
             insert_tran_type_code=f"""INSERT INTO [TRAN] (TRAN_NAME,TRAN_NAME_LOCAL,TRAN_STTS,SRVC_TYPE_CODE,SUB_SRVC_TYPE_CODE,TRAN_DESC,IS_DELETED  
@@ -94,7 +96,7 @@ def archive_table_batch(table, archival_date):
             with src_conn.cursor() as cur:
                 cur.execute(insert_tran_type_code)                               
                 tran_type_code = cur.execute(get_tran_type_code).fetchone()[0]
-                src_conn.commit()
+                # src_conn.commit()
 
 
             create_agg_table = f"""
@@ -112,8 +114,8 @@ def archive_table_batch(table, archival_date):
                 INSERT INTO {temp_acct_tran}
                 SELECT 
                     CASE 
-                        WHEN SUB_OPRN_TYPE = '00001' THEN DEBT_ACCT 
-                        ELSE CRDT_ACCT 
+                        WHEN SUB_OPRN_TYPE = '00001' THEN CRDT_ACCT 
+                        ELSE  DEBT_ACCT
                     END AS ACCT_NO,
                     SUB_OPRN_TYPE,
                     SUM(AMNT),
@@ -123,21 +125,16 @@ def archive_table_batch(table, archival_date):
                 JOIN {temp_table_name} I ON A.ACCT_TRAN_ID = I.RECID
                 GROUP BY 
                     CASE 
-                        WHEN SUB_OPRN_TYPE = '00001' THEN DEBT_ACCT 
-                        ELSE CRDT_ACCT 
+                        WHEN SUB_OPRN_TYPE = '00001' THEN CRDT_ACCT 
+                        ELSE DEBT_ACCT
                     END,
                     SUB_OPRN_TYPE
             """
             with src_conn.cursor() as cur:
                 cur.execute(create_agg_table)
                 cur.execute(agg_insert_sql)
-                src_conn.commit()        
-
-            if final_delete:
-                with src_conn.cursor() as cur:
-                            cur.execute(final_delete)
-                            src_conn.commit()
-
+                # src_conn.commit()        
+            
             agg_acct_tran=f"""MERGE ACCT_TRAN AS TARGET USING (SELECT    
                 TOTAL_AMNT AS AMNT, TOTAL_AMNT_BASE AS AMNT_BASE_CRCY,  TOTAL_AMNT_FRGN AS AMNT_FRGN_CRCY,'00000' AS AMNT_TYPE_CODE,TOTAL_AMNT_BASE/replace(isnull(TOTAL_AMNT,1),0,1) AS XCHG_RATE,    
                 CASE WHEN A.SUB_OPRN_TYPE='00002' then ACCT_NO else '00009999' end AS DEBT_ACCT,  
@@ -167,7 +164,12 @@ def archive_table_batch(table, archival_date):
                 """
             with src_conn.cursor() as cur:
                 cur.execute(agg_acct_tran)
-                src_conn.commit()
+                # src_conn.commit()
+            
+            if final_delete:
+                with src_conn.cursor() as cur:
+                            cur.execute(final_delete)
+                            # src_conn.commit()
 
         if delete_sql:
             final_delete = delete_sql.replace(
@@ -177,15 +179,18 @@ def archive_table_batch(table, archival_date):
 
             with src_conn.cursor() as src_cursor:
                 src_cursor.execute(final_delete)
-                src_conn.commit() 
+                # src_conn.commit() 
 
         with src_conn.cursor() as cur:
             cur.execute(f"SELECT COUNT(*) FROM {temp_table_name}")
             rows_archived = cur.fetchone()[0]
 
+        src_conn.commit()
+
         return {'status': 'success', 'rows_archived': rows_archived}
 
     except Exception as e:
+        src_conn.rollback()
         logger.exception(f"Error archiving table {table.table_name}")
         return {'status': 'error', 'error': str(e)}
 
