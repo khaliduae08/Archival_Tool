@@ -111,7 +111,9 @@ def user_add(request):
         email = request.POST.get('email')
         is_superuser = request.POST.get('is_superuser') == 'on'
         is_active = request.POST.get('is_active') == 'on'
-        # group_id = request.POST.get('group')
+        if User.objects.filter(username=username).exists():
+            messages.error(request, f'User with username "{username}" already exists.')
+            return redirect('user_add')
         User.objects.create_user(username=username, password=password, email=email, is_active=is_active, is_superuser=is_superuser)
         # if group_id:
         #     group = Group.objects.get(id=group_id)

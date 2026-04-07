@@ -58,6 +58,30 @@
 
                 <div class="row mt-3">
                     <div class="col-md-12">
+                        {% if messages %}
+                            {% for message in messages %}
+                            
+                                <div class="w-25 alert alert-{% if message.tags == 'error' %}danger{% elif message.tags == 'warning' %}warning{% elif message.tags == 'success' %}success{% else %}info{% endif %} alert-dismissible fade show" role="alert"  id="alert-{{ forloop.counter }}">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            
+                                <script>
+                                    (function() {
+                                        var alertDiv = document.getElementById('alert-{{ forloop.counter }}');
+                                        if (alertDiv) {
+                                            setTimeout(function() {
+                                                alertDiv.classList.remove('show');
+                                                alertDiv.classList.add('fade');
+                                                setTimeout(function() {
+                                                    if (alertDiv.parentNode) alertDiv.parentNode.removeChild(alertDiv);
+                                                }, 150);
+                                            }, 5000);
+                                        }
+                                    })();
+                                </script>
+                            {% endfor %}
+                        {% endif %}
                         {% block content %}{% endblock %}
                     </div>
                 </div>
