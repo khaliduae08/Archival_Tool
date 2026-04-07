@@ -106,15 +106,17 @@ def user_add(request):
         username = request.POST.get('username')
         password = request.POST.get('password')
         email = request.POST.get('email')
-        group_id = request.POST.get('group')
-        user = User.objects.create_user(username=username, password=password, email=email)
-        if group_id:
-            group = Group.objects.get(id=group_id)
-            user.groups.add(group)
+        is_superuser = request.POST.get('is_superuser') == 'on'
+        is_active = request.POST.get('is_active') == 'on'
+        # group_id = request.POST.get('group')
+        User.objects.create_user(username=username, password=password, email=email, is_active=is_active, is_superuser=is_superuser)
+        # if group_id:
+        #     group = Group.objects.get(id=group_id)
+        #     user.groups.add(group)
         messages.success(request, 'User added.')
         return redirect('user_list')
     groups = Group.objects.all()
-    return render(request, 'admin/user_form.html', {'action': 'Add', 'groups': groups})
+    return render(request, 'admin/user_form.html', {'action': 'Add', 'form_user': None})
 
 @login_required
 @user_passes_test(is_admin)
@@ -125,16 +127,18 @@ def user_edit(request, pk):
         user.email = request.POST.get('email')
         if request.POST.get('password'):
             user.set_password(request.POST.get('password'))
-        group_id = request.POST.get('group')
-        user.groups.clear()
-        if group_id:
-            group = Group.objects.get(id=group_id)
-            user.groups.add(group)
+        user.is_superuser = request.POST.get('is_superuser') == 'on'
+        user.is_active = request.POST.get('is_active') == 'on'
+        # group_id = request.POST.get('group')
+        # user.groups.clear()
+        # if group_id:
+        #     group = Group.objects.get(id=group_id)
+        #     user.groups.add(group)
         user.save()
         messages.success(request, 'User updated.')
         return redirect('user_list')
     groups = Group.objects.all()
-    return render(request, 'admin/user_form.html', {'action': 'Edit', 'user': user, 'groups': groups})
+    return render(request, 'admin/user_form.html', {'action': 'Edit', 'form_user': user})
 
 @login_required
 @user_passes_test(is_admin)
@@ -488,6 +492,7 @@ def save_archival_history(request, module_id):
         return JsonResponse({'status': 'error', 'error': 'Missing archival_date'}, status=400)
     transaction = ArchivalTransaction.objects.create(
         module=module,
+        userName=request.user.username,
         archival_date=archival_date,
         total_execution_time=total_time
     )

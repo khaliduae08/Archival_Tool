@@ -49,7 +49,9 @@
                 <div class="dashboard-header d-flex justify-content-between align-items-center">
                     <a href="{% url 'admin_dashboard' %}" class="dashboard-title text-decoration-none text-gray-800"><h1 class="h3 mb-0 text-gray-800">Data LifeCycle Tool</h1></a>
                      <!-- class="btn btn-sm btn-outline-primary">Home</a> -->
-                    <div class="d-flex align-items-right">
+                    
+                    <div class="d-flex align-items-right">         
+                        <span class="me-3 align-right menu-item">Hello, {{ user.username }}</span>               
                         <a href="{% url 'logout' %}" class="menu-item">Logout</a>
                     </div>
                 </div>
@@ -71,7 +73,7 @@
                                 <a href="{% url 'connection_list' %}" class="menu-item">Database Connections</a>
                                 <a href="{% url 'application_list' %}" class="menu-item">Manage Applications</a>
                                 <a href="{% url 'user_list' %}" class="menu-item">Users</a>
-                                <a href="{% url 'group_list' %}" class="menu-item">Groups</a>
+                                <!-- <a href="{% url 'group_list' %}" class="menu-item">Groups</a> -->
                             {% endif %}
                         </div>
                     </div>

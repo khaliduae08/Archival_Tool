@@ -11,8 +11,9 @@
                     <tr>
                         <th>Username</th>
                         <th>Email</th>
-                        <th>Group</th>
+                        <!-- <th>Group</th> -->
                         <th>Superuser</th>
+                        <th>Active</th>
                         <th>Actions</th>
                     </thead>
                 <tbody>
@@ -20,14 +21,15 @@
                     <tr>
                         <td>{{ user.username }}</td>
                         <td>{{ user.email }}</td>
-                        <td>
+                        <!-- <td>
                             {% for group in user.groups.all %}
                                 {{ group.name }}{% if not forloop.last %}, {% endif %}
                             {% empty %}
                                 -
                             {% endfor %}
-                        </td>
+                        </td> -->
                         <td>{% if user.is_superuser %}Yes{% else %}No{% endif %}</td>
+                        <td>{% if user.is_active %}Yes{% else %}No{% endif %}</td>
                         <td>
                             <a href="{% url 'user_edit' user.id %}" class="btn btn-sm btn-warning">Edit</a>
                              {% if user != request.user %}
