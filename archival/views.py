@@ -97,6 +97,9 @@ def group_delete(request, pk):
 @user_passes_test(is_admin)
 def user_list(request):
     users = User.objects.all()
+    search = request.GET.get('search', '')
+    if search:
+        users = users.filter(username__icontains=search)
     return render(request, 'admin/user_list.html', {'users': users})
 
 @login_required
@@ -193,6 +196,9 @@ def home(request):
 @login_required
 def connection_list(request):
     connections = DatabaseConnection.objects.all()
+    search = request.GET.get('search', '')
+    if search:
+        connections = connections.filter(server__icontains=search) | connections.filter(database__icontains=search) | connections.filter(username__icontains=search)
     return render(request, 'archival/connection_list.html', {'connections': connections})
 
 @login_required
@@ -243,6 +249,10 @@ def connection_delete(request, pk):
 def application_list(request):
     apps = Application.objects.all()
     connection = DatabaseConnection.objects.all()
+    search = request.GET.get('search', '')
+    if search:
+        apps = apps.filter(name__icontains=search)
+
     return render(request, 'archival/application_list.html', {'apps': apps, 'connections': connection})
 
 @login_required
@@ -320,6 +330,9 @@ def module_run(request, app_id):
 def module_list(request, app_id):
     app = get_object_or_404(Application, pk=app_id)
     modules = app.modules.all()
+    search = request.GET.get('search', '')
+    if search:
+        modules = modules.filter(name__icontains=search)
     return render(request, 'archival/module_list.html', {'app': app, 'modules': modules})
 
 @login_required
@@ -361,6 +374,9 @@ def module_delete(request, app_id, pk):
 def table_list(request, module_id):
     module = get_object_or_404(ArchivalModule, pk=module_id)
     tables = module.tables.all()
+    search = request.GET.get('search', '')
+    if search:
+        tables = tables.filter(table_name__icontains=search)
     return render(request, 'archival/table_list.html', {'module': module, 'tables': tables})
 
 @login_required
