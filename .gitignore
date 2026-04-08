@@ -17,3 +17,6 @@ db.sqlite3
 
 # Windows / IIS
 web.config
+
+# Environment variables
+.env

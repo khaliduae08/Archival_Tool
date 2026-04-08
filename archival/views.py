@@ -7,7 +7,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from archival.core import archive_module, archive_table_batch
 from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
-from .utils import get_connection, run_test_script
+from .utils import get_connection, notify_application_completion, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date
 from django.contrib.auth.decorators import login_required
@@ -106,21 +106,21 @@ def user_list(request):
 @user_passes_test(is_admin)
 def user_add(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        email = request.POST.get('email')
-        is_superuser = request.POST.get('is_superuser') == 'on'
-        is_active = request.POST.get('is_active') == 'on'
-        if User.objects.filter(username=username).exists():
-            messages.error(request, f'User with username "{username}" already exists.')
-            return redirect('user_add')
-        User.objects.create_user(username=username, password=password, email=email, is_active=is_active, is_superuser=is_superuser)
-        # if group_id:
-        #     group = Group.objects.get(id=group_id)
-        #     user.groups.add(group)
-        messages.success(request, 'User added.')
-        return redirect('user_list')
-    groups = Group.objects.all()
+        try:
+            username = request.POST.get('username')
+            password = request.POST.get('password')
+            email = request.POST.get('email')
+            is_superuser = request.POST.get('is_superuser') == 'on'
+            is_active = request.POST.get('is_active') == 'on'
+            if User.objects.filter(username=username).exists():
+                messages.error(request, f'User with username "{username}" already exists.')
+                return redirect('user_add')
+            User.objects.create_user(username=username, password=password, email=email, is_active=is_active, is_superuser=is_superuser)
+            messages.success(request, 'User added.')
+            return redirect('user_list')
+        except Exception as e:
+            messages.error(request, f'Error adding user: {e}')
+       
     return render(request, 'admin/user_form.html', {'action': 'Add', 'form_user': None})
 
 @login_required
@@ -128,29 +128,30 @@ def user_add(request):
 def user_edit(request, pk):
     user = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
-        user.username = request.POST.get('username')
-        user.email = request.POST.get('email')
-        if request.POST.get('password'):
-            user.set_password(request.POST.get('password'))
-        user.is_superuser = request.POST.get('is_superuser') == 'on'
-        user.is_active = request.POST.get('is_active') == 'on'
-        # group_id = request.POST.get('group')
-        # user.groups.clear()
-        # if group_id:
-        #     group = Group.objects.get(id=group_id)
-        #     user.groups.add(group)
-        user.save()
-        messages.success(request, 'User updated.')
-        return redirect('user_list')
-    groups = Group.objects.all()
+        try:
+            user.username = request.POST.get('username')
+            user.email = request.POST.get('email')
+            if request.POST.get('password'):
+                user.set_password(request.POST.get('password'))
+            user.is_superuser = request.POST.get('is_superuser') == 'on'
+            user.is_active = request.POST.get('is_active') == 'on'
+            user.save()
+            messages.success(request, 'User updated.')
+            return redirect('user_list')
+        except Exception as e:
+            messages.error(request, f'Error updating user: {e}')
+    
     return render(request, 'admin/user_form.html', {'action': 'Edit', 'form_user': user})
 
 @login_required
 @user_passes_test(is_admin)
 def user_delete(request, pk):
     user = get_object_or_404(User, pk=pk)
-    user.delete()
-    messages.success(request, 'User deleted.')
+    try:
+        user.delete()
+        messages.success(request, 'User deleted.')
+    except Exception as e:
+        messages.error(request, f'Error deleting user: {e}')
     return redirect('user_list')
 
 @login_required
@@ -205,45 +206,54 @@ def connection_list(request):
 
 @login_required
 def connection_add(request):
-    if request.method == 'POST':        
-        server = request.POST.get('server')
-        database = request.POST.get('database')
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        # Validate required fields
-        if not all([server, database, username, password]):
-            messages.error(request, 'All fields are required.')
-            return redirect('connection_add')
-        DatabaseConnection.objects.create(
-            server=server,
-            database=database,
-            username=username,
-            password=password
-        )
-        messages.success(request, 'Connection added.')
-        return redirect('connection_list')
+    if request.method == 'POST':  
+        try:
+            server = request.POST.get('server')
+            database = request.POST.get('database')
+            username = request.POST.get('username')
+            password = request.POST.get('password')
+            # Validate required fields
+            if not all([server, database, username, password]):
+                messages.error(request, 'All fields are required.')
+                return redirect('connection_add')
+            DatabaseConnection.objects.create(
+                server=server,
+                database=database,
+                username=username,
+                password=password
+            )
+            messages.success(request, 'Connection added.')
+            return redirect('connection_list')
+        except Exception as e:
+            messages.error(request, f'Error adding connection: {e}')
     return render(request, 'archival/connection_form.html', {'action': 'Add'})
 
 @login_required
 def connection_edit(request, pk):
     connection = get_object_or_404(DatabaseConnection, pk=pk)
     if request.method == 'POST':
-        connection.server = request.POST.get('server')
-        connection.database = request.POST.get('database')
-        connection.username = request.POST.get('username')
-        new_password = request.POST.get('password')
-        if new_password:   
-            connection.password = new_password
-        connection.save()
-        messages.success(request, 'Connection updated.')
-        return redirect('connection_list')
+        try:
+            connection.server = request.POST.get('server')
+            connection.database = request.POST.get('database')
+            connection.username = request.POST.get('username')
+            new_password = request.POST.get('password')
+            if new_password:   
+                connection.password = new_password
+            connection.save()
+            messages.success(request, 'Connection updated.')
+            return redirect('connection_list')
+        except Exception as e:
+            messages.error(request, f'Error updating connection: {e}')
     return render(request, 'archival/connection_form.html', {'action': 'Edit', 'connection': connection})
 
 @login_required
 def connection_delete(request, pk):
-    connection = get_object_or_404(DatabaseConnection, pk=pk)
-    connection.delete()
-    messages.success(request, 'Connection deleted.')
+    try:
+        connection = get_object_or_404(DatabaseConnection, pk=pk)
+        connection.delete()
+        messages.success(request, 'Connection deleted.')
+    except Exception as e:
+        messages.error(request, f'Error deleting connection: {e}')
     return redirect('connection_list')
 
 # ---- Application CRUD ----
@@ -260,15 +270,16 @@ def application_list(request):
 @login_required
 def application_add(request):
     if request.method == 'POST':
-        name = request.POST.get('name')
-        source_id = request.POST.get('src_conn')
-        dest_id = request.POST.get('dstn_conn')
-        volume = request.POST.get('volume')
-        select_session = request.POST.get('select_session')
-        target_session = request.POST.get('target_session')
-        transfer_method = request.POST.get('transfer_method')
-        max_date = request.POST.get('max_date')
-        app = Application.objects.create(
+        try:
+            name = request.POST.get('name')
+            source_id = request.POST.get('src_conn')
+            dest_id = request.POST.get('dstn_conn')
+            volume = request.POST.get('volume')
+            select_session = request.POST.get('select_session')
+            target_session = request.POST.get('target_session')
+            transfer_method = request.POST.get('transfer_method')
+            max_date = request.POST.get('max_date')
+            app = Application.objects.create(
             name=name,
             src_conn_id=source_id or None,
             dstn_conn_id=dest_id or None,
@@ -277,9 +288,11 @@ def application_add(request):
             target_session=target_session,
             transfer_method=transfer_method,
             max_date=max_date
-        )
-        messages.success(request, 'Application added.')
-        return redirect('application_list')
+            )
+            messages.success(request, 'Application added.')
+            return redirect('application_list')
+        except Exception as e:
+            messages.error(request, f'Error adding application: {e}')
     conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
         'action': 'Add',
@@ -292,17 +305,20 @@ def application_add(request):
 def application_edit(request, pk):
     app = get_object_or_404(Application, pk=pk)
     if request.method == 'POST':
-        app.name = request.POST.get('name')
-        app.src_conn_id = request.POST.get('src_conn') or None
-        app.dstn_conn_id = request.POST.get('dstn_conn') or None
-        app.volume = request.POST.get('volume')
-        app.select_session = request.POST.get('select_session')
-        app.target_session = request.POST.get('target_session')
-        app.transfer_method = request.POST.get('transfer_method')
-        app.max_date = request.POST.get('max_date')
-        app.save()
-        messages.success(request, 'Application updated.')
-        return redirect('application_list')
+        try:
+            app.name = request.POST.get('name')
+            app.src_conn_id = request.POST.get('src_conn') or None
+            app.dstn_conn_id = request.POST.get('dstn_conn') or None
+            app.volume = request.POST.get('volume')
+            app.select_session = request.POST.get('select_session')
+            app.target_session = request.POST.get('target_session')
+            app.transfer_method = request.POST.get('transfer_method')
+            app.max_date = request.POST.get('max_date')
+            app.save()
+            messages.success(request, 'Application updated.')
+            return redirect('application_list')
+        except Exception as e:
+            messages.error(request, f'Error updating application: {e}')
     conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
         'action': 'Edit',
@@ -315,8 +331,12 @@ def application_edit(request, pk):
 @login_required
 def application_delete(request, pk):
     app = get_object_or_404(Application, pk=pk)
-    app.delete()
-    messages.success(request, 'Application deleted.')
+    try:
+        app.delete()
+        messages.success(request, 'Application deleted.')
+    except Exception as e:
+        messages.error(request, f'Error deleting application: {e}')
+    
     return redirect('application_list')
 
 #---- Module Run ----
@@ -331,7 +351,11 @@ def module_run(request, app_id):
 @login_required
 def module_list(request, app_id):
     app = get_object_or_404(Application, pk=app_id)
-    modules = app.modules.all()
+    try:
+        modules = app.modules.all()
+    except Exception as e:
+        messages.error(request, f'Error fetching modules: {e}')
+        modules = []
     search = request.GET.get('search', '')
     if search:
         modules = modules.filter(name__icontains=search)
@@ -343,31 +367,39 @@ def module_add(request, app_id):
     if request.method == 'POST':
         name = request.POST.get('name')
         last_date = request.POST.get('last_archival_date')
-        module = ArchivalModule.objects.create(
-            application=app,
-            name=name,
-            last_archival_date=last_date
-        )
-        messages.success(request, 'Module added.')
-        return redirect('module_list', app_id=app.id)
+        try:
+            module = ArchivalModule.objects.create(
+                application=app,
+                name=name,
+                last_archival_date=last_date
+            )
+            messages.success(request, 'Module added.')
+            return redirect('module_list', app_id=app.id)
+        except Exception as e:
+            messages.error(request, f'Error adding module: {e}')
     return render(request, 'archival/module_form.html', {'app': app, 'action': 'Add'})
 
 @login_required
 def module_edit(request, app_id, pk):
     module = get_object_or_404(ArchivalModule, pk=pk, application_id=app_id)
     if request.method == 'POST':
-        module.name = request.POST.get('name')
-        module.last_archival_date = request.POST.get('last_archival_date')
-        module.save()
-        messages.success(request, 'Module updated.')
+        try:
+            module.name = request.POST.get('name')
+            module.last_archival_date = request.POST.get('last_archival_date')
+            module.save()
+            messages.success(request, 'Module updated.')
+        except Exception as e:
+            messages.error(request, f'Error updating module: {e}')
         return redirect('module_list', app_id=app_id)
     return render(request, 'archival/module_form.html', {'app': module.application, 'module': module, 'action': 'Edit'})
 
 @login_required
 def module_delete(request, app_id, pk):
     module = get_object_or_404(ArchivalModule, pk=pk, application_id=app_id)
-    module.delete()
-    messages.success(request, 'Module deleted.')
+    try:        
+        module.delete()
+    except Exception as e:
+        messages.error(request, f'Error deleting module: {e}')
     return redirect('module_list', app_id=app_id)
 
 
@@ -385,7 +417,8 @@ def table_list(request, module_id):
 def table_add(request, module_id):
     module = get_object_or_404(ArchivalModule, pk=module_id)
     if request.method == 'POST':
-        table = ArchivalTable.objects.create(
+        try:
+            table = ArchivalTable.objects.create(
             module=module,
             table_name=request.POST.get('table_name'),
             sequence=request.POST.get('sequence'),
@@ -394,8 +427,10 @@ def table_add(request, module_id):
             delete_script=request.POST.get('delete_script'),
             acct_sum=request.POST.get('acct_sum'),
             # identity_insert=request.POST.get('identity_insert') == 'on'
-        )
-        messages.success(request, 'Table added.')
+            )
+            messages.success(request, 'Table added.')
+        except Exception as e:
+            messages.error(request, f'Error adding table: {e}')
         return redirect('table_list', module_id=module.id)
     return render(request, 'archival/table_form.html', {'module': module, 'action': 'Add'})
 
@@ -403,24 +438,30 @@ def table_add(request, module_id):
 def table_edit(request, module_id, pk):
     table = get_object_or_404(ArchivalTable, pk=pk, module_id=module_id)
     if request.method == 'POST':
-        table.table_name = request.POST.get('table_name')
-        table.sequence = request.POST.get('sequence')
-        table.select_script = request.POST.get('select_script')
-        table.insert_script = request.POST.get('insert_script')
-        table.delete_script = request.POST.get('delete_script')
-        table.acct_sum = request.POST.get('acct_sum')
-        # table.identity_insert = request.POST.get('identity_insert') == 'on'
-        table.save()
-        # print(f"Updated table: {table.table_name}, acct_sum: {table.acct_sum}, identity_insert: {table.identity_insert}")
-        messages.success(request, 'Table updated.')
+        try:
+            table.table_name = request.POST.get('table_name')
+            table.sequence = request.POST.get('sequence')
+            table.select_script = request.POST.get('select_script')
+            table.insert_script = request.POST.get('insert_script')
+            table.delete_script = request.POST.get('delete_script')
+            table.acct_sum = request.POST.get('acct_sum')
+            # table.identity_insert = request.POST.get('identity_insert') == 'on'
+            table.save()
+            messages.success(request, 'Table updated.')
+        except Exception as e:
+            messages.error(request, f'Error updating table: {e}')
+        
         return redirect('table_list', module_id=module_id)
     return render(request, 'archival/table_form.html', {'module': table.module, 'table': table, 'action': 'Edit'})
 
 @login_required
 def table_delete(request, module_id, pk):
     table = get_object_or_404(ArchivalTable, pk=pk, module_id=module_id)
-    table.delete()
-    messages.success(request, 'Table deleted.')
+    try:
+        table.delete()
+        messages.success(request, 'Table deleted.')
+    except Exception as e:
+        messages.error(request, f'Error deleting table: {e}')
     return redirect('table_list', module_id=module_id)
 
 
@@ -488,6 +529,7 @@ def update_module_date(request, module_id):
             if parsed_date:
                 module.last_archival_date = parsed_date
                 module.save()
+                notify_application_completion(module.application)
                 return JsonResponse({'status': 'success', 'new_date': date_str})
             else:
                 return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)

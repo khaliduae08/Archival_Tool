@@ -26,10 +26,18 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <input type="date" class="form-control" id="date-{{ module.id }}" 
-                                       max="{{ today }}" placeholder="YYYY-MM-DD">
+                                {% if module.last_archival_date >= apps.max_date %}
+                                    <input type="text" class="form-control" value="Archival completed for this module" readonly>                                    
+                                {% else %}                                  
+                                    <input type="date" class="form-control" id="date-{{ module.id }}" 
+                                       max="{% if apps.max_date %}{{ apps.max_date|date:'Y-m-d' }}{% endif %}" placeholder="YYYY-MM-DD">
+                                {% endif %}                                                            
+                                
                             </td>
                             <td>
+                                {% if module.last_archival_date >= apps.max_date %}
+                                    <button class="btn btn-secondary btn-sm" disabled>Process</button>
+                                {% else %}
                                 <button class="btn btn-primary btn-sm" 
                                         data-module-id="{{ module.id }}"
                                         data-last="{% if module.last_archival_date %}{{ module.last_archival_date|date:'Y-m-d' }}{% endif %}"
@@ -37,6 +45,7 @@
                                         onclick="processModule(this, {{ module.id }}, '{{ module.name|escapejs }}')">
                                     Process
                                 </button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
