@@ -106,6 +106,63 @@
         </div>
     </div>
 
+    <script>
+// Idle timeout in milliseconds (should match SESSION_COOKIE_AGE)
+const sessionTimeout = {{ SESSION_COOKIE_AGE }} * 1000;
+let warningTimeout;
+let logoutTimeout;
+
+function startTimers() {
+    // Clear any existing timers
+    clearTimeout(warningTimeout);
+    clearTimeout(logoutTimeout);
+
+    // Set warning 1 minute before expiry
+    warningTimeout = setTimeout(() => {
+        $('#sessionWarningModal').modal('show');
+        // Set logout after 1 minute (the remaining time)
+        logoutTimeout = setTimeout(() => {
+            window.location.href = "{% url 'logout' %}";
+        }, 60000);
+    }, sessionTimeout - 60000);
+}
+
+// Reset timers on user activity
+function resetTimers() {
+    startTimers();
+}
+
+// Listen for user activity events
+document.onload = resetTimers;
+document.onmousemove = resetTimers;
+document.onkeypress = resetTimers;
+document.onscroll = resetTimers;
+document.onclick = resetTimers;
+
+// Start timers on page load
+startTimers();
+</script>
+
+<!-- Warning Modal (add to base.html) -->
+<div class="modal fade" id="sessionWarningModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">Session Expiring Soon</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Your session will expire in 1 minute due to inactivity.</p>
+                <p>Click "Stay Logged In" to continue working.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="resetTimers();">Stay Logged In</button>
+                <a href="{% url 'logout' %}" class="btn btn-danger">Logout Now</a>
+            </div>
+        </div>
+    </div>
+</div>
+
     <!-- Modal for progress -->
     <div class="modal fade" id="progressModal" tabindex="-1" aria-labelledby="progressModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">

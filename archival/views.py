@@ -1,5 +1,7 @@
 import json
 import uuid
+import pyodbc
+from django.db import IntegrityError
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
@@ -206,16 +208,41 @@ def connection_list(request):
 
 @login_required
 def connection_add(request):
-    if request.method == 'POST':  
-        try:
-            server = request.POST.get('server')
-            database = request.POST.get('database')
-            username = request.POST.get('username')
-            password = request.POST.get('password')
-            # Validate required fields
-            if not all([server, database, username, password]):
-                messages.error(request, 'All fields are required.')
-                return redirect('connection_add')
+    if request.method == 'POST':          
+        server = request.POST.get('server')
+        database = request.POST.get('database')
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        # Validate required fields
+        if not all([server, database, username, password]):
+            messages.error(request, 'All fields are required.')
+            return redirect('connection_add')
+
+        try:        
+            conn_str = (
+                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"SERVER={server};"
+                f"DATABASE={database};"
+                f"UID={username};"
+                f"PWD={password};"
+                "Trusted_Connection=no;"
+                "Connection Timeout=5;"  
+            )            
+            test_conn = pyodbc.connect(conn_str)
+            test_conn.close()
+        except pyodbc.Error as e:
+            error_msg = str(e) 
+            if "Login failed" in error_msg:
+                messages.error(request, "Invalid username or password.")
+            elif "cannot open database" in error_msg:
+                messages.error(request, f"Database '{database}' does not exist or is inaccessible.")
+            elif "Server is not found or not accessibler" in error_msg or "network-related" in error_msg:
+                messages.error(request, "Please enter a valid server address. (Unable to reach the server)")
+            else:
+                messages.error(request, f"Unable to connect to the database. Please check the details. {error_msg}")
+            return render(request, 'archival/connection_form.html', {'action': 'Add', 'form_data': request.POST})
+
+        try:    
             DatabaseConnection.objects.create(
                 server=server,
                 database=database,
@@ -224,6 +251,8 @@ def connection_add(request):
             )
             messages.success(request, 'Connection added.')
             return redirect('connection_list')
+        except IntegrityError:
+            messages.error(request, 'A connection with the same server and database already exists.')
         except Exception as e:
             messages.error(request, f'Error adding connection: {e}')
     return render(request, 'archival/connection_form.html', {'action': 'Add'})
@@ -232,13 +261,37 @@ def connection_add(request):
 def connection_edit(request, pk):
     connection = get_object_or_404(DatabaseConnection, pk=pk)
     if request.method == 'POST':
+        connection.server = request.POST.get('server')
+        connection.database = request.POST.get('database')
+        connection.username = request.POST.get('username')
+        new_password = request.POST.get('password')
+        if new_password:   
+            connection.password = new_password
+
+        try:        
+            conn_str = (
+                f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+                f"SERVER={connection.server};"
+                f"DATABASE={connection.database};"
+                f"UID={connection.username};"
+                f"PWD={connection.password};"
+                "Trusted_Connection=no;"
+                "Connection Timeout=5;"  
+            )            
+            test_conn = pyodbc.connect(conn_str)
+            test_conn.close()
+        except pyodbc.Error as e:
+            error_msg = str(e) 
+            if "Login failed" in error_msg:
+                messages.error(request, "Invalid username or password.")
+            elif "cannot open database" in error_msg:
+                messages.error(request, f"Database '{connection.database}' does not exist or is inaccessible.")
+            elif "Server is not found or not accessibler" in error_msg or "network-related" in error_msg:
+                messages.error(request, "Please enter a valid server address. (Unable to reach the server)")
+            else:
+                messages.error(request, f"Unable to connect to the database. Please check the details. {error_msg}")
+            return render(request, 'archival/connection_form.html', {'action': 'Edit', 'connection': connection})
         try:
-            connection.server = request.POST.get('server')
-            connection.database = request.POST.get('database')
-            connection.username = request.POST.get('username')
-            new_password = request.POST.get('password')
-            if new_password:   
-                connection.password = new_password
             connection.save()
             messages.success(request, 'Connection updated.')
             return redirect('connection_list')
@@ -250,8 +303,13 @@ def connection_edit(request, pk):
 def connection_delete(request, pk):
     try:
         connection = get_object_or_404(DatabaseConnection, pk=pk)
-        connection.delete()
-        messages.success(request, 'Connection deleted.')
+        module=ArchivalModule.objects.filter(application__src_conn=connection).first() or ArchivalModule.objects.filter(application__dstn_conn=connection).first()
+        if module:
+            messages.error(request, f'Cannot delete connection because it is associated with application "{module.application.name}". Please update or delete the application first.')
+            return redirect('connection_list')
+        else:
+            connection.delete()
+            messages.success(request, 'Connection deleted.')
     except Exception as e:
         messages.error(request, f'Error deleting connection: {e}')
     return redirect('connection_list')

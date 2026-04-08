@@ -42,6 +42,12 @@ INSTALLED_APPS = [
     'archival',
 ]
 
+# Session settings
+SESSION_COOKIE_AGE = 1800  # 30 minutes
+SESSION_SAVE_EVERY_REQUEST = True  # Reset session timer on each request
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -65,6 +71,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'archival.context_processors.session_timeout',
             ],
         },
     },
