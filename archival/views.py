@@ -6,6 +6,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q
 
 from archival.core import archive_module, archive_table_batch
 from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
@@ -19,6 +20,8 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.models import Permission
 from django.contrib.auth import logout
+
+from archival import models
 
 
 def custom_logout(request):
@@ -626,14 +629,52 @@ def save_archival_history(request, module_id):
 
     return JsonResponse({'status': 'success'})
 
-def transaction_list(request):
-    transactions = ArchivalTransaction.objects.all()
-    # print(transactions)
-    return render(request, 'archival/Transaction.html', {'transactions': transactions})
+# def transaction_list(request, app_id):
+#     application = get_object_or_404(Application, id=app_id)
+#     transactions = ArchivalTransaction.objects.filter(module__application=application)
+#     search = request.GET.get('search', '')
+#     if search:
+#         transactions = transactions.filter(userName__icontains=search) | transactions.filter(module__name__icontains=search)
+#     # print(transactions)
+#     return render(request, 'archival/Transaction.html', {'transactions': transactions})
 
 def transaction_detail(request, transaction_id):
     transaction = get_object_or_404(ArchivalTransaction, id=transaction_id)
     details = transaction.details.all()
+    search = request.GET.get('search', '')
+    if search:
+        details = details.filter(table_name__icontains=search)
     # print(details)
     return render(request, 'archival/transaction_details.html', {'transaction': transaction, 'details': details})
 
+def transaction_list(request):
+    applications = Application.objects.all()
+    
+    # Get selected app_id from GET, or default to first application if exists
+    app_id = request.GET.get('app_id')
+    selected_application = None
+    transactions = ArchivalTransaction.objects.none()
+    
+    if app_id:
+        selected_application = get_object_or_404(Application, id=app_id)
+        transactions = ArchivalTransaction.objects.filter(module__application=selected_application)
+    elif applications.exists():
+        # Default to first application
+        selected_application = applications.first()
+        transactions = ArchivalTransaction.objects.filter(module__application=selected_application)
+        app_id = selected_application.id  # for the hidden field or URL
+    
+    # Search filter (if any)
+    search = request.GET.get('search', '')
+    if search and transactions:
+        transactions = transactions.filter(
+            Q(userName__icontains=search) | Q(module__name__icontains=search)
+        )
+    
+    context = {
+        'applications': applications,
+        'selected_application': selected_application,
+        'transactions': transactions,
+        'search': search,
+    }
+    return render(request, 'archival/transaction.html', context)

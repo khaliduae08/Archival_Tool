@@ -27,29 +27,9 @@
         </select>
     </div>
     <div class="mb-3">
-        <label>Volume (batch size)</label>
-        <input type="number" name="volume" class="form-control" value="{{ app.volume|default:1000 }}" required>
+        <label>Archival Cut off Date</label>
+        <input type="date" name="max_date" class="form-control" value="{{ app.max_date|default:'' }}">
     </div>
-    <div class="mb-3">
-        <label>Select Sessions (parallel readers)</label>
-        <input type="number" name="select_session" class="form-control" value="{{ app.select_session|default:1 }}" required>
-    </div>
-    <div class="mb-3">
-        <label>Target Sessions (parallel writers)</label>
-        <input type="number" name="target_session" class="form-control" value="{{ app.target_session|default:1 }}" required>
-    </div>
-    <div class="mb-3">
-        <label>Transfer Method</label>
-        <select name="transfer_method" class="form-select">
-            {% for value, label in transfer_choices %}
-                <option value="{{ value }}" {% if app.transfer_method == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-        </select>
-    </div>
-        <div class="mb-3">
-            <label>Max Date (optional)</label>
-            <input type="date" name="max_date" class="form-control" value="{{ app.max_date|default:'' }}">
-        </div>
 
     <button type="submit" class="btn btn-primary">Save</button>
     <a href="{% url 'application_list' %}" class="btn btn-secondary">Cancel</a>

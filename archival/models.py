@@ -17,9 +17,9 @@ class DatabaseConnection(models.Model):
     
 class Application(models.Model):
     TRANSFER_CHOICES = (
-        ('direct','Direct Insert'),
-        ('bcp','Bulk Copy'),
-        ('inline','Same server'),
+        ('direct','Direct'),
+        ('bcp','BCP'),
+        ('inline','Inline'),
     )
     name = models.CharField(max_length=100, unique=True)
     src_conn = models.ForeignKey(DatabaseConnection, on_delete=models.SET_NULL, null=True, blank=True, related_name='source_apps', limit_choices_to={'name': 'source'})
@@ -27,7 +27,7 @@ class Application(models.Model):
     volume = models.PositiveIntegerField(default=1000, help_text="Number of records per batch")
     select_session = models.PositiveSmallIntegerField(default=1, help_text="Number of parallel session for reading")
     target_session = models.PositiveSmallIntegerField(default=1, help_text="Number of parallel session for insert")
-    transfer_method = models.CharField(max_length=20, choices=TRANSFER_CHOICES, default='direct')
+    transfer_method = models.CharField(max_length=20, choices=TRANSFER_CHOICES, default='inline')
     max_date = models.DateField(null=True, blank=True, help_text="Max date for archival (optional)")
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -2,12 +2,34 @@
 
 {% block content %}
 <h2>Transactions History</h2>
+
 <form method="get" class="mb-3">
-                <div class="input-group w-25">
-                    <input type="text" name="search" class="form-control" placeholder="Search by any field..." value="{{ request.GET.search|default:'' }}">
-                    <button class="btn btn-outline-secondary" type="submit">Search</button>
-                </div>
-            </form>
+    <div class="row">
+
+        <div class="col-md-4">
+            <label for="appSelect" class="form-label">Select Application</label>
+            <select name="app_id" id="appSelect" class="form-select">
+                {% for app in applications %}
+                    <option value="{{ app.id }}" {% if selected_application.id == app.id %}selected{% endif %}>
+                        {{ app.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+
+
+        <div class="col-md-4">
+            <label for="searchInput" class="form-label">Search</label>
+            <div class="input-group">
+                <input type="text" name="search" id="searchInput" class="form-control" 
+                       placeholder="Username or module..." value="{{ search }}">
+                <button class="btn btn-outline-secondary" type="submit">Search</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+
 <table class="table table-bordered">
     <thead>
         <tr>
@@ -16,7 +38,8 @@
             <th>Archival Date</th>
             <th>Total Execution Time</th>
             <th>Actions</th>
-        </thead>
+        </tr>
+    </thead>
     <tbody>
         {% for tran in transactions %}
         <tr>
@@ -29,8 +52,15 @@
             </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8">No transactions done yet.</td></tr>
+        <tr><td colspan="5">No transactions found for this application.</td></tr>
         {% endfor %}
     </tbody>
 </table>
+
+<script>
+    document.getElementById('appSelect').addEventListener('change', function() {
+        this.form.submit();
+    });
+</script>
+
 {% endblock %}

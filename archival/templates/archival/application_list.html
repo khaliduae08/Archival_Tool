@@ -17,10 +17,6 @@
             <th>Name</th>
             <th>Source</th>
             <th>Destination</th>
-            <th>Volume</th>
-            <th>Select Sessions</th>
-            <th>Target Sessions</th>
-            <th>Upload Type</th>
             <th>Archival Cut off Date</th>
             <th>Actions</th>
         </thead>
@@ -30,11 +26,7 @@
             <td>{{ app.name }}</td>
             <td>{{ app.src_conn }}</td>
             <td>{{ app.dstn_conn }}</td>
-            <td>{{ app.volume }}</td>
-            <td>{{ app.select_session }}</td>
-            <td>{{ app.target_session }}</td>
-            <td>{{ app.transfer_method }}</td>
-            <td>{{ app.max_date|default:'Not set' }}</td>
+            <td>{{ app.max_date|default:'Not set' }}</td>                        
             <td>
                 <a href="{% url 'module_list' app.id %}" class="btn btn-sm btn-info">Modules</a>
                 {% if user.is_superuser or user.groups.all.0.name == 'admin'%}
