@@ -334,20 +334,12 @@ def application_add(request):
         try:
             name = request.POST.get('name')
             source_id = request.POST.get('src_conn')
-            dest_id = request.POST.get('dstn_conn')
-            volume = request.POST.get('volume')
-            select_session = request.POST.get('select_session')
-            target_session = request.POST.get('target_session')
-            transfer_method = request.POST.get('transfer_method')
+            dest_id = request.POST.get('dstn_conn')            
             max_date = request.POST.get('max_date')
             app = Application.objects.create(
             name=name,
             src_conn_id=source_id or None,
-            dstn_conn_id=dest_id or None,
-            volume=volume,
-            select_session=select_session,
-            target_session=target_session,
-            transfer_method=transfer_method,
+            dstn_conn_id=dest_id or None,            
             max_date=max_date
             )
             messages.success(request, 'Application added.')
@@ -370,10 +362,6 @@ def application_edit(request, pk):
             app.name = request.POST.get('name')
             app.src_conn_id = request.POST.get('src_conn') or None
             app.dstn_conn_id = request.POST.get('dstn_conn') or None
-            app.volume = request.POST.get('volume')
-            app.select_session = request.POST.get('select_session')
-            app.target_session = request.POST.get('target_session')
-            app.transfer_method = request.POST.get('transfer_method')
             app.max_date = request.POST.get('max_date')
             app.save()
             messages.success(request, 'Application updated.')
