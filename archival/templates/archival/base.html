@@ -97,6 +97,7 @@
                                 <a href="{% url 'connection_list' %}" class="menu-item">Database Connections</a>
                                 <a href="{% url 'application_list' %}" class="menu-item">Manage Applications</a>
                                 <a href="{% url 'user_list' %}" class="menu-item">Users</a>
+                                <a href="{% url 'audit_log' %}" class="menu-item">Audit Log</a>
                                 <!-- <a href="{% url 'group_list' %}" class="menu-item">Groups</a> -->
                             {% endif %}
                         </div>
@@ -326,11 +327,17 @@ startTimers();
                         var tableName = table.table_name || $('#table-' + table.id + ' td:first').text();
                         if (response.status === 'success') {
                             var rows = response.rows_archived || 0;
+                            var rowsInserted = response.rows_inserted || 0;
+                            var rowsDeleted = response.rows_deleted || 0;
+                            var rowsMerged = response.rows_merged || 0;
                             statusSpan.removeClass().addClass('badge bg-success').text('Success');
                             $('#count-' + table.id).text(rows + ' / ' + (table.count || 0));
                             tableResults.push({
                                 table_name: tableName,
-                                row_count: rows,
+                                row_archived: rows,
+                                row_inserted: rowsInserted,
+                                row_deleted: rowsDeleted,
+                                rows_merged: rowsMerged,
                                 execution_time: parseFloat(elapsed),
                                 status: 'success',
                                 error_message: ''

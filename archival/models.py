@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 class DatabaseConnection(models.Model):
     CONN_TYPES = (
@@ -87,7 +88,10 @@ class ArchivalTransaction(models.Model):
 class ArchivalTransactionDetail(models.Model):
     transaction = models.ForeignKey(ArchivalTransaction, on_delete=models.CASCADE, related_name='details')
     table_name = models.CharField(max_length=200)
-    row_count = models.IntegerField(default=0)
+    total_rows_inserted = models.IntegerField(default=0)
+    total_rows_merged = models.IntegerField(default=0)
+    total_rows_deleted = models.IntegerField(default=0)
+    total_rows_archived = models.IntegerField(default=0)
     execution_time = models.FloatField(help_text="Time in seconds")
     archived_ids = models.TextField(blank=True, null=True, help_text="Comma-separated list of IDs (or range)")
     status = models.CharField(max_length=20, default='success')
@@ -96,3 +100,27 @@ class ArchivalTransactionDetail(models.Model):
     def __str__(self):
         return f"{self.transaction.module.name} - {self.table_name}"
     
+class AuditLog(models.Model):
+    ACTION_CHOICES = (
+        ('VIEW', 'View'),
+        ('CREATE', 'Create'),
+        ('UPDATE', 'Update'),
+        ('DELETE', 'Delete'),
+        ('PROCESS', 'Process'),
+        ('LOGIN', 'Login'),
+        ('LOGOUT', 'Logout'),
+        ('ERROR', 'Error'),
+    )
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    module = models.CharField(max_length=100, blank=True, null=True)   
+    object_id = models.IntegerField(null=True, blank=True)             
+    details = models.TextField(blank=True, null=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    success = models.BooleanField(default=True)
+    error_message = models.TextField(blank=True, null=True)
+
+    class Meta:
+        ordering = ['-timestamp']

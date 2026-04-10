@@ -45,12 +45,13 @@ urlpatterns = [
     path('transactions/', views.transaction_list, name='transaction_list'),
     path('transactions/<int:transaction_id>/', views.transaction_detail, name='transaction_detail'),
 
-
+    # Audit log
+    path('audit_log/', views.audit_log, name='audit_log'),
 
     # AJAX endpoints
     path('api/get_tables/<int:module_id>/', views.get_module_tables, name='get_tables'),
     path('api/run_script/<int:table_id>/', views.run_table_script, name='run_script'),
-    path('api/complete_archival/<int:module_id>/', views.complete_archival, name='complete_archival'),
+    # path('api/complete_archival/<int:module_id>/', views.complete_archival, name='complete_archival'),
     path('api/update_module_date/<int:module_id>/', views.update_module_date, name='update_module_date'),
     path('api/count_table/<int:table_id>/', views.get_table_count, name='count_table'),
     path('api/save_archival_history/<int:module_id>/', views.save_archival_history, name='save_archival_history'),

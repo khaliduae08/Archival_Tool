@@ -1,7 +1,7 @@
 import pyodbc
 
 from mf_archival import settings
-from .models import DatabaseConnection, ArchivalModule
+from .models import AuditLog, DatabaseConnection, ArchivalModule
 from django.core.mail import send_mail
 
 def get_connection(conn_type):
@@ -20,18 +20,36 @@ def get_connection(conn_type):
     )
     return pyodbc.connect(conn_str)
 
-def notify_application_completion(application):
-
-    modules = application.modules.all()
-    if all(module.last_archival_date >= application.max_date for module in modules):
-        subject = f"All modules archived for application: {application.name}"
-        message = (
-            f"The application '{application.name}' has successfully archived all its modules.\n\n"
-            f"Modules:\n" + "\n".join([f"- {m.name} (last archived: {m.last_archival_date})" for m in modules])
-        )
-        recipient_list = getattr(settings, 'ARCHIVAL_NOTIFICATION_EMAILS', [])
-        if recipient_list:
-            send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
+def notify_application_completion(application, user=None):
+    try:
+        modules = application.modules.all()
+        if all(module.last_archival_date >= application.max_date for module in modules):
+            subject = f"All modules archived for application: {application.name}"
+            message = (
+                f"The application '{application.name}' has successfully archived all its modules.\n\n"
+                f"Modules:\n" + "\n".join([f"- {m.name} (last archived: {m.last_archival_date})" for m in modules])
+            )
+            recipient_list = getattr(settings, 'ARCHIVAL_NOTIFICATION_EMAILS', [])
+            if recipient_list:
+                send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, recipient_list, fail_silently=False)
+                if user:
+                    AuditLog.objects.create(
+                        user=user,
+                        action='NOTIFY',
+                        module=application.name,
+                        details=f"Sent completion notification email for application '{application.name}'",
+                        success=True
+                    )
+    except Exception as e:
+        if user:
+            AuditLog.objects.create(
+                user=user,
+                action='NOTIFY',
+                module=application.name,
+                details=f"Error sending notification email for application '{application.name}': {str(e)}",
+                success=False
+            )
+        print(f"Error sending notification email for application '{application.name}': {str(e)}")
 
             
 def run_test_script(table):

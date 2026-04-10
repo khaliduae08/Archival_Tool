@@ -1,0 +1,36 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2>Audit Log</h2>
+<form method="get" class="mb-3">
+                <div class="input-group w-25">
+                    <input type="text" name="search" class="form-control" placeholder="Search by application..." value="{{ request.GET.search|default:'' }}">
+                    <button class="btn btn-outline-secondary" type="submit">Search</button>
+                </div>
+            </form>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>User</th>
+            <th>Action</th>
+            <th>Module</th>
+            <th>Details</th>
+            <th>Timestamp</th>
+            <th>Success</th>
+        </thead>
+    <tbody>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.user.username }}</td>
+            <td>{{ log.action }}</td>
+            <td>{{ log.module }}</td>
+            <td>{{ log.details }}</td>
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.success }}</td>            
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">No applications defined. Add one.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,7 +1,7 @@
 import logging
 import uuid
 from django.db import connection
-from .models import ArchivalTable,ArchivalModule
+from .models import ArchivalTable,ArchivalModule, AuditLog
 from .utils import get_connection
 
 
@@ -27,16 +27,15 @@ def archive_module(module_id, archival_date):
             break  
     return {'status': 'success' if total_success else 'partial', 'results': results}
 
-def archive_table_batch(table, archival_date):
+def archive_table_batch(table, archival_date, user=None):
     temp_table_name = f"{table.table_name}1_{uuid.uuid4().hex}"
     app = table.module.application
-    if not app.src_conn or not app.dstn_conn:
-        return {'status': 'error', 'error': 'Missing source/destination connection'}
+    if not app.src_conn:
+        return {'status': 'error', 'error': 'Missing source connection'}
 
     src_conn = get_connection(app.src_conn.name)
-    dst_conn = get_connection(app.dstn_conn.name)
+    src_conn.autocommit = False
 
-    
     try:    
         select_sql = table.select_script.format(archival_date=archival_date)
         with src_conn.cursor() as cur:
@@ -47,24 +46,9 @@ def archive_table_batch(table, archival_date):
                 CREATE CLUSTERED INDEX IX_{temp_table_name}_RECID 
                     ON {temp_table_name}(RECID);
                     """)
-            src_conn.commit()
-        
-        with src_conn.cursor() as cur:
-            insert_temp_sql = f"""
-                INSERT INTO {temp_table_name} (RECID)
-                {select_sql}
-            """
-            cur.execute(insert_temp_sql)
-            src_conn.commit()
-
+            cur.execute(f"INSERT INTO {temp_table_name} (RECID) {select_sql}")
         
         insert_sql = table.insert_script
-        delete_sql = table.delete_script            
-
-        if table.delete_script:
-            if '{archival_date}' in delete_sql:
-                delete_sql = delete_sql.format(archival_date=archival_date)
-
         if '{archival_date}' in insert_sql:
             insert_sql = insert_sql.format(archival_date=archival_date)
 
@@ -72,21 +56,31 @@ def archive_table_batch(table, archival_date):
             "IN ({ids})",
             f"IN (SELECT RECID FROM {temp_table_name})"
         )
+
+        
+        delete_sql = table.delete_script            
+
+        if table.delete_script:
+            if '{archival_date}' in delete_sql:
+                delete_sql = delete_sql.format(archival_date=archival_date)
+        
         if delete_sql:
             final_delete = delete_sql.replace(
                 "IN ({ids})",
                 f"IN (SELECT RECID FROM {temp_table_name})"
             )
 
-        src_conn.autocommit = False
 
         with src_conn.cursor() as cur:
             cur.execute(final_insert)
+            row_inserted = cur.rowcount
             # src_conn.commit()
         
+        rows_merged = 0
         if table.acct_sum == 'Y':
             temp_acct_tran=f"{table.table_name}2_{uuid.uuid4().hex}"
             app_name=table.module.application.name
+
             get_tran_type_code=f"""SELECT TRAN_ID FROM [TRAN] WHERE TRAN_NAME ='{app_name}_ARCHIVAL'"""
             insert_tran_type_code=f"""INSERT INTO [TRAN] (TRAN_NAME,TRAN_NAME_LOCAL,TRAN_STTS,SRVC_TYPE_CODE,SUB_SRVC_TYPE_CODE,TRAN_DESC,IS_DELETED  
                                         ,IS_ACTIVE,SESSION_ID,SESSION_CODE,CREATED_BY,CREATED_ON)  
@@ -96,7 +90,6 @@ def archive_table_batch(table, archival_date):
             with src_conn.cursor() as cur:
                 cur.execute(insert_tran_type_code)                               
                 tran_type_code = cur.execute(get_tran_type_code).fetchone()[0]
-                # src_conn.commit()
 
 
             create_agg_table = f"""
@@ -164,33 +157,58 @@ def archive_table_batch(table, archival_date):
                 """
             with src_conn.cursor() as cur:
                 cur.execute(agg_acct_tran)
+                rows_merged = cur.rowcount
                 # src_conn.commit()
             
-            if final_delete:
-                with src_conn.cursor() as cur:
-                            cur.execute(final_delete)
-                            # src_conn.commit()
-
+            # if final_delete:
+            #     with src_conn.cursor() as cur:
+            #                 cur.execute(final_delete)
+            #                 # src_conn.commit()
         if delete_sql:
-            final_delete = delete_sql.replace(
-                "IN ({ids})",
-                f"IN (SELECT RECID FROM {temp_table_name})"
-                )
-
             with src_conn.cursor() as src_cursor:
                 src_cursor.execute(final_delete)
-                # src_conn.commit() 
+                rows_deleted = src_cursor.rowcount
+        else:
+            rows_deleted = 0
 
         with src_conn.cursor() as cur:
             cur.execute(f"SELECT COUNT(*) FROM {temp_table_name}")
             rows_archived = cur.fetchone()[0]
 
-        src_conn.commit()
-
-        return {'status': 'success', 'rows_archived': rows_archived}
+        if rows_archived == row_inserted == rows_deleted:
+            src_conn.commit()
+            if user:
+                AuditLog.objects.create(
+                user=user,
+                action='PROCESS',
+                module=table.module.name,
+                details=f"Archived {rows_archived} rows, Inserted {row_inserted}, Merged {rows_merged} and Deleted {rows_deleted} from {table.table_name}",
+                success=True
+                )
+            return {'status': 'success', 'rows_archived': rows_archived, 'rows_inserted': row_inserted, 'rows_deleted': rows_deleted, 'rows_merged': rows_merged}
+        else:
+            src_conn.rollback()
+            if user:
+                AuditLog.objects.create(
+                user=user,
+                action='PROCESS',
+                module=table.module.name,
+                details=f"Row count mismatch for table {table.table_name}: expected {row_inserted}, got {rows_archived}",
+                success=False
+                )
+            logger.error(f"Row count mismatch for table {table.table_name}: expected {row_inserted}, got {rows_archived}")
+            return {'status': 'error', 'error': f"Row count mismatch: expected {row_inserted}, got {rows_archived}"}
 
     except Exception as e:
         src_conn.rollback()
+        if user:
+                AuditLog.objects.create(
+                user=user,
+                action='PROCESS',
+                module=table.module.name,
+                details=f"Error archiving table {table.table_name}: {str(e)}",
+                success=False
+                )
         logger.exception(f"Error archiving table {table.table_name}")
         return {'status': 'error', 'error': str(e)}
 
@@ -204,4 +222,4 @@ def archive_table_batch(table, archival_date):
         except Exception:
             pass
         src_conn.close()
-        dst_conn.close()
+        

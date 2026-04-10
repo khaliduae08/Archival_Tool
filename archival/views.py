@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q
 
 from archival.core import archive_module, archive_table_batch
-from .models import Application, ArchivalModule, ArchivalTable, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
+from .models import Application, ArchivalModule, ArchivalTable, AuditLog, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
 from .utils import get_connection, notify_application_completion, run_test_script
 from django.utils.dateparse import parse_date
 from datetime import date
@@ -121,9 +121,25 @@ def user_add(request):
                 messages.error(request, f'User with username "{username}" already exists.')
                 return redirect('user_add')
             User.objects.create_user(username=username, password=password, email=email, is_active=is_active, is_superuser=is_superuser)
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add User',
+                module='User Management',
+                details=f"Added user '{username}' with email '{email}' and superuser status {is_superuser}",
+                success=True
+                )
             messages.success(request, 'User added.')
             return redirect('user_list')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add User',
+                module='User Management',
+                details=f"Error adding user: {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error adding user: {e}')
        
     return render(request, 'admin/user_form.html', {'action': 'Add', 'form_user': None})
@@ -141,9 +157,25 @@ def user_edit(request, pk):
             user.is_superuser = request.POST.get('is_superuser') == 'on'
             user.is_active = request.POST.get('is_active') == 'on'
             user.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add User',
+                module='User Management',
+                details=f"Updated user '{user.username}' with email '{user.email}' and superuser status {user.is_superuser}",
+                success=True
+                )
             messages.success(request, 'User updated.')
             return redirect('user_list')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add User',
+                module='User Management',
+                details=f"Error updating user: {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error updating user: {e}')
     
     return render(request, 'admin/user_form.html', {'action': 'Edit', 'form_user': user})
@@ -154,8 +186,24 @@ def user_delete(request, pk):
     user = get_object_or_404(User, pk=pk)
     try:
         user.delete()
+        if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Delete User',
+                module='User Management',
+                details=f"Deleted user '{user.username}'",
+                success=True
+                )
         messages.success(request, 'User deleted.')
     except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete User',
+                module='User Management',
+                details=f"Error deleting user: {str(e)}",
+                success=False
+            )
         messages.error(request, f'Error deleting user: {e}')
     return redirect('user_list')
 
@@ -176,8 +224,24 @@ def update_module_date(request, module_id):
             if parsed_date:
                 module.last_archival_date = parsed_date
                 module.save()
+                if request.user:
+                    AuditLog.objects.create(
+                    user=request.user,
+                    action='Update Module Date',
+                    module='Last Archival Date Update',
+                    details=f"Updated module '{module.name}' with new archival date: {date_str}",
+                    success=True
+                    )
                 return JsonResponse({'status': 'success', 'new_date': date_str})
             else:
+                if request.user:
+                    AuditLog.objects.create(
+                    user=request.user,
+                    action='Update Module Date',
+                    module='Last Archival Date Update',
+                    details=f"Failed to update module '{module.name}' with invalid date format: {date_str}",
+                    success=False
+                    )
                 return JsonResponse({'status': 'error', 'message': 'Invalid date format'}, status=400)
         return JsonResponse({'status': 'error', 'message': 'No date provided'}, status=400)
     return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -252,11 +316,27 @@ def connection_add(request):
                 username=username,
                 password=password
             )
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Connection',
+                module='Connection Management',
+                details=f"Added connection for server '{server}' and database '{database}'",
+                success=True
+                )
             messages.success(request, 'Connection added.')
             return redirect('connection_list')
         except IntegrityError:
             messages.error(request, 'A connection with the same server and database already exists.')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Connection',
+                module='Connection Management',
+                details=f"Error adding connection for server '{server}' and database '{database}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error adding connection: {e}')
     return render(request, 'archival/connection_form.html', {'action': 'Add'})
 
@@ -296,9 +376,25 @@ def connection_edit(request, pk):
             return render(request, 'archival/connection_form.html', {'action': 'Edit', 'connection': connection})
         try:
             connection.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Connection',
+                module='Connection Management',
+                details=f"Edited connection for server '{connection.server}' and database '{connection.database}'",
+                success=True
+                )
             messages.success(request, 'Connection updated.')
             return redirect('connection_list')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Connection',
+                module='Connection Management',
+                details=f"Error updating connection for server '{connection.server}' and database '{connection.database}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error updating connection: {e}')
     return render(request, 'archival/connection_form.html', {'action': 'Edit', 'connection': connection})
 
@@ -312,8 +408,24 @@ def connection_delete(request, pk):
             return redirect('connection_list')
         else:
             connection.delete()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Delete Connection',
+                module='Connection Management',
+                details=f"Deleted connection for server '{connection.server}' and database '{connection.database}'",
+                success=True
+                )
             messages.success(request, 'Connection deleted.')
     except Exception as e:
+        if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Delete Connection',
+                module='Connection Management',
+                details=f"Error deleting connection for server '{connection.server}' and database '{connection.database}': {str(e)}",
+                success=False
+                )
         messages.error(request, f'Error deleting connection: {e}')
     return redirect('connection_list')
 
@@ -342,9 +454,25 @@ def application_add(request):
             dstn_conn_id=dest_id or None,            
             max_date=max_date
             )
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Application',
+                module='Application Management',
+                details=f"Added application '{name}'",
+                success=True
+                )
             messages.success(request, 'Application added.')
             return redirect('application_list')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Application',
+                module='Application Management',
+                details=f"Error adding application '{name}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error adding application: {e}')
     conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
@@ -364,9 +492,25 @@ def application_edit(request, pk):
             app.dstn_conn_id = request.POST.get('dstn_conn') or None
             app.max_date = request.POST.get('max_date')
             app.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Application',
+                module='Application Management',
+                details=f"Edited application '{app.name}'",
+                success=True
+                )
             messages.success(request, 'Application updated.')
             return redirect('application_list')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Application',
+                module='Application Management',
+                details=f"Error editing application '{app.name}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error updating application: {e}')
     conns = DatabaseConnection.objects.all()
     return render(request, 'archival/application_form.html', {
@@ -382,8 +526,24 @@ def application_delete(request, pk):
     app = get_object_or_404(Application, pk=pk)
     try:
         app.delete()
+        if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Delete Application',
+                module='Application Management',
+                details=f"Deleted application '{app.name}'",
+                success=True
+                )
         messages.success(request, 'Application deleted.')
     except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete Application',
+                module='Application Management',
+                details=f"Error deleting application '{app.name}': {str(e)}",
+                success=False
+            )
         messages.error(request, f'Error deleting application: {e}')
     
     return redirect('application_list')
@@ -422,9 +582,25 @@ def module_add(request, app_id):
                 name=name,
                 last_archival_date=last_date
             )
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Module',
+                module='Module Management',
+                details=f"Added module '{name}' to application '{app.name}'",
+                success=True
+                )
             messages.success(request, 'Module added.')
             return redirect('module_list', app_id=app.id)
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Module',
+                module='Module Management',
+                details=f"Error adding module '{name}' to application '{app.name}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error adding module: {e}')
     return render(request, 'archival/module_form.html', {'app': app, 'action': 'Add'})
 
@@ -436,8 +612,24 @@ def module_edit(request, app_id, pk):
             module.name = request.POST.get('name')
             module.last_archival_date = request.POST.get('last_archival_date')
             module.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Module',
+                module='Module Management',
+                details=f"Edited module '{module.name}' in application '{module.application.name}'",
+                success=True
+                )
             messages.success(request, 'Module updated.')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Module',
+                module='Module Management',
+                details=f"Error editing module '{module.name}' in application '{module.application.name}': {str(e)}",
+                success=False
+                )
             messages.error(request, f'Error updating module: {e}')
         return redirect('module_list', app_id=app_id)
     return render(request, 'archival/module_form.html', {'app': module.application, 'module': module, 'action': 'Edit'})
@@ -447,7 +639,23 @@ def module_delete(request, app_id, pk):
     module = get_object_or_404(ArchivalModule, pk=pk, application_id=app_id)
     try:        
         module.delete()
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete Module',
+                module='Module Management',
+                details=f"Deleted module '{module.name}' from application '{module.application.name}'",
+                success=True
+            )
     except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete Module',
+                module='Module Management',
+                details=f"Error deleting module '{module.name}' from application '{module.application.name}': {str(e)}",
+                success=False
+            )
         messages.error(request, f'Error deleting module: {e}')
     return redirect('module_list', app_id=app_id)
 
@@ -477,8 +685,24 @@ def table_add(request, module_id):
             acct_sum=request.POST.get('acct_sum'),
             # identity_insert=request.POST.get('identity_insert') == 'on'
             )
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add Table',
+                module='Table Management',
+                details=f"Added table '{table.table_name}' to module '{module.name}' in application '{module.application.name}'",
+                success=True
+                )
             messages.success(request, 'Table added.')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='Add Table',
+                    module='Table Management',
+                    details=f"Error adding table '{table.table_name}' to module '{module.name}' in application '{module.application.name}': {str(e)}",
+                    success=False
+                )
             messages.error(request, f'Error adding table: {e}')
         return redirect('table_list', module_id=module.id)
     return render(request, 'archival/table_form.html', {'module': module, 'action': 'Add'})
@@ -496,8 +720,25 @@ def table_edit(request, module_id, pk):
             table.acct_sum = request.POST.get('acct_sum')
             # table.identity_insert = request.POST.get('identity_insert') == 'on'
             table.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit Table',
+                module='Table Management',
+                details=f"Edited table '{table.table_name}' in module '{table.module.name}' of application '{table.module.application.name}'",
+                success=True
+                )
             messages.success(request, 'Table updated.')
         except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='Edit Table',
+                    module='Table Management',
+                    details=f"Error editing table '{table.table_name}' in module '{table.module.name}' of application '{table.module.application.name}': {str(e)}",
+                    success=False
+                )
+
             messages.error(request, f'Error updating table: {e}')
         
         return redirect('table_list', module_id=module_id)
@@ -508,8 +749,25 @@ def table_delete(request, module_id, pk):
     table = get_object_or_404(ArchivalTable, pk=pk, module_id=module_id)
     try:
         table.delete()
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete Table',
+                module='Table Management',
+                details=f"Deleted table '{table.table_name}' from module '{table.module.name}' in application '{table.module.application.name}'",
+                success=True
+            )
+
         messages.success(request, 'Table deleted.')
     except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete Table',
+                module='Table Management',
+                details=f"Error deleting table '{table.table_name}' from module '{table.module.name}' in application '{table.module.application.name}': {str(e)}",
+                success=False
+            )
         messages.error(request, f'Error deleting table: {e}')
     return redirect('table_list', module_id=module_id)
 
@@ -529,21 +787,21 @@ def run_table_script(request, table_id):
         if not archival_date:
             return JsonResponse({'status': 'error', 'error': 'No archival date provided'}, status=400)
 
-        result = archive_table_batch(table, archival_date)
+        result = archive_table_batch(table, archival_date, user=request.user)
         # print (f"Script execution result for table {table.table_name}: {result}")
         return JsonResponse(result)
     
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
-@csrf_exempt
-@login_required
-def complete_archival(request, module_id):
-    if request.method == 'POST':
-        archival_date = request.POST.get('archival_date')
-    if not archival_date:
-        return JsonResponse({'status': 'error', 'error': 'No date provided'}, status=400)
-    result = archive_module(module_id, archival_date)
-    return JsonResponse(result)
+# @csrf_exempt
+# @login_required
+# def complete_archival(request, module_id):
+#     if request.method == 'POST':
+#         archival_date = request.POST.get('archival_date')
+#     if not archival_date:
+#         return JsonResponse({'status': 'error', 'error': 'No date provided'}, status=400)
+#     result = archive_module(module_id, archival_date)
+#     return JsonResponse(result)
 
 @login_required
 def get_table_count(request, table_id):
@@ -552,6 +810,14 @@ def get_table_count(request, table_id):
     table = get_object_or_404(ArchivalTable, id=table_id)
     archival_date = request.GET.get('archival_date')
     if not archival_date:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Get Table Count',
+                module='Table Management',
+                details=f"Failed to get count for table '{table.table_name}' in module '{table.module.name}' of application '{table.module.application.name}' due to missing archival date",
+                success=False
+            )
         return JsonResponse({'error': 'No archival date provided'}, status=400)
 
     select_sql = table.select_script.format(archival_date=archival_date)    
@@ -564,8 +830,24 @@ def get_table_count(request, table_id):
             cursor.execute(count_sql)
             count = cursor.fetchone()[0]
         src_conn.close()
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Get Table Count',
+                module='Table Management',
+                details=f"Retrieved count for table '{table.table_name}' in module '{table.module.name}' of application '{table.module.application.name}' for archival date {archival_date}: {count}",
+                success=True
+            )
         return JsonResponse({'status': 'success', 'count': count})
     except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Get Table Count',
+                module='Table Management',
+                details=f"Error getting count for table '{table.table_name}' in module '{table.module.name}' of application '{table.module.application.name}': {str(e)}",
+                success=False
+            )
         return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
 
 @csrf_exempt
@@ -578,9 +860,25 @@ def update_module_date(request, module_id):
             if parsed_date:
                 module.last_archival_date = parsed_date
                 module.save()
+                if request.user:
+                    AuditLog.objects.create(
+                    user=request.user,
+                    action='Update Module Date',
+                    module='Last Archival Date Update',
+                    details=f"Updated module '{module.name}' with new archival date: {date_str}",
+                    success=True
+                    )
                 notify_application_completion(module.application)
                 return JsonResponse({'status': 'success', 'new_date': date_str})
             else:
+                if request.user:
+                    AuditLog.objects.create(
+                    user=request.user,
+                    action='Update Module Date',
+                    module='Last Archival Date Update',
+                    details=f"Failed to update module '{module.name}' with invalid date format: {date_str}",
+                    success=False
+                    )
                 return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)
         return JsonResponse({'status': 'error', 'message': 'No date'}, status=400)
     return JsonResponse({'error': 'Method not allowed'}, status=405)
@@ -592,28 +890,51 @@ def update_module_date(request, module_id):
 def save_archival_history(request, module_id):
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    module = get_object_or_404(ArchivalModule, id=module_id)
-    data = json.loads(request.body)
-    archival_date = data.get('archival_date')
-    total_time = data.get('total_time')
-    results = data.get('results', [])
-    if not archival_date:
-        return JsonResponse({'status': 'error', 'error': 'Missing archival_date'}, status=400)
-    transaction = ArchivalTransaction.objects.create(
-        module=module,
-        userName=request.user.username,
-        archival_date=archival_date,
-        total_execution_time=total_time
-    )
-    for res in results:
-        ArchivalTransactionDetail.objects.create(
-            transaction=transaction,
-            table_name=res.get('table_name', ''),
-            row_count=res.get('row_count', 0),
-            execution_time=res.get('execution_time', 0),
-            status=res.get('status', 'unknown'),
-            error_message=res.get('error_message', '')
+    try:
+        module = get_object_or_404(ArchivalModule, id=module_id)
+        data = json.loads(request.body)
+        archival_date = data.get('archival_date')
+        total_time = data.get('total_time')
+        results = data.get('results', [])
+        if not archival_date:
+            return JsonResponse({'status': 'error', 'error': 'Missing archival_date'}, status=400)
+        transaction = ArchivalTransaction.objects.create(
+            module=module,
+            userName=request.user.username,
+            archival_date=archival_date,
+            total_execution_time=total_time
         )
+        for res in results:
+            ArchivalTransactionDetail.objects.create(
+                transaction=transaction,
+                table_name=res.get('table_name', ''),
+                total_rows_archived=res.get('row_archived', 0),
+                total_rows_inserted=res.get('row_inserted', 0),
+                total_rows_deleted=res.get('row_deleted', 0),
+                total_rows_merged=res.get('rows_merged', 0),
+                execution_time=res.get('execution_time', 0),
+                status=res.get('status', 'unknown'),
+                error_message=res.get('error_message', '')
+            )
+
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Save Archival History',
+                module='Archival History',
+                details=f"Saved archival history for module '{module.name}' in application '{module.application.name}' for archival date {archival_date}",
+                success=True
+            )
+    except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Save Archival History',
+                module='Archival History',
+                details=f"Error saving archival history for module '{module.name}' in application '{module.application.name}': {str(e)}",
+                success=False
+            )    
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
 
     return JsonResponse({'status': 'success'})
 
@@ -666,3 +987,16 @@ def transaction_list(request):
         'search': search,
     }
     return render(request, 'archival/transaction.html', context)
+
+
+def audit_log(request):
+    logs = AuditLog.objects.all().order_by('-timestamp')
+    search = request.GET.get('search', '')
+    if search:
+        logs = logs.filter(
+            Q(user__username__icontains=search) |
+            Q(action__icontains=search) |
+            Q(module__icontains=search) |
+            Q(details__icontains=search)
+           )
+    return render(request, 'archival/audit_log.html', {'logs': logs, 'search': search})

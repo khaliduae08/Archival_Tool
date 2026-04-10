@@ -12,7 +12,10 @@
     <thead>
         <tr>
             <th>Table Name</th>
-            <th>Row Count</th>
+            <th>Rows Archived</th>
+            <th>Rows Inserted</th>
+            <th>Rows Deleted</th>
+            <th>Rows Merged</th>
             <th>Execution Time</th>
             <!-- <th>Archival Id</th> -->
             <th>Status</th>
@@ -22,7 +25,10 @@
         {% for det in details %}
         <tr>
             <td>{{ det.table_name }}</td>
-            <td>{{ det.row_count }}</td>
+            <td>{{ det.total_rows_archived }}</td>
+            <td>{{ det.total_rows_inserted }}</td>
+            <td>{{ det.total_rows_deleted }}</td>
+            <td>{{ det.total_rows_merged }}</td>
             <td>{{ det.execution_time }}</td>
             <!-- <td>{{ det.archival_id }}</td> -->
             <td>{{ det.status }}</td>
