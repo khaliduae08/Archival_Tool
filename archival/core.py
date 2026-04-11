@@ -46,7 +46,10 @@ def archive_table_batch(table, archival_date, user=None):
                 CREATE CLUSTERED INDEX IX_{temp_table_name}_RECID 
                     ON {temp_table_name}(RECID);
                     """)
-            cur.execute(f"INSERT INTO {temp_table_name} (RECID) {select_sql}")
+            cur.execute(f"""
+                    INSERT INTO {temp_table_name} (RECID) 
+                    SELECT DISTINCT * FROM ({select_sql}) AS src
+                """)
         
         insert_sql = table.insert_script
         if '{archival_date}' in insert_sql:
@@ -175,7 +178,7 @@ def archive_table_batch(table, archival_date, user=None):
             cur.execute(f"SELECT COUNT(*) FROM {temp_table_name}")
             rows_archived = cur.fetchone()[0]
 
-        if rows_archived == row_inserted == rows_deleted:
+        if  row_inserted == rows_deleted:
             src_conn.commit()
             if user:
                 AuditLog.objects.create(
