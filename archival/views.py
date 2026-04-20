@@ -775,6 +775,10 @@ def table_delete(request, module_id, pk):
 @login_required
 def get_module_tables(request, module_id):    
     module = get_object_or_404(ArchivalModule, id=module_id)
+    if module.status == 'In Progress':        
+        return JsonResponse({'status': 'error', 'error': 'Module is currently running. Please wait until it completes.'}, status=400)
+    module.status = 'In Progress'
+    module.save()   
     tables = module.tables.all().values('id', 'table_name', 'sequence')
     return JsonResponse(list(tables), safe=False)
 
@@ -859,6 +863,7 @@ def update_module_date(request, module_id):
             parsed_date = parse_date(date_str)
             if parsed_date:
                 module.last_archival_date = parsed_date
+                module.status = 'Completed'
                 module.save()
                 if request.user:
                     AuditLog.objects.create(
@@ -882,6 +887,16 @@ def update_module_date(request, module_id):
                 return JsonResponse({'status': 'error', 'message': 'Invalid date'}, status=400)
         return JsonResponse({'status': 'error', 'message': 'No date'}, status=400)
     return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@csrf_exempt
+@login_required
+def reset_module_status(request, module_id):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    module = get_object_or_404(ArchivalModule, id=module_id)
+    module.status = 'nothing'
+    module.save()
+    return JsonResponse({'status': 'success'})
 
 
 # ----- Archival History -----

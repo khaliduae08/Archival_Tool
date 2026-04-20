@@ -39,6 +39,7 @@ class ArchivalModule(models.Model):
     application = models.ForeignKey(Application, on_delete=models.SET_NULL, null=True, related_name='modules')
     name = models.CharField(max_length=200, unique=True)
     last_archival_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, default='nothing', help_text="nothing, in_progress, completed, failed")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

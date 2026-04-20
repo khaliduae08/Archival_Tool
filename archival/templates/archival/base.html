@@ -204,7 +204,7 @@ startTimers();
         const csrftoken = getCookie('csrftoken');
 
 
-       function startProcess(button, moduleId, moduleName, archivalDate) {
+    function startProcess(button, moduleId, moduleName, archivalDate) {
     const overallStart = Date.now();
     let tableResults = [];
     let totalSuccess = true;
@@ -215,12 +215,22 @@ startTimers();
     var modal = new bootstrap.Modal(document.getElementById('progressModal'));
     modal.show();
 
-    // Finalization function: saves history and updates module date if all succeeded
+    // Reset module status to 'nothing' after archival finishes
+    function resetModuleStatus() {
+        $.ajax({
+            url: '/api/reset_module_status/' + moduleId + '/',
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrftoken },
+            success: function() { console.log('Module status reset to nothing'); },
+            error: function(xhr) { console.error('Failed to reset module status', xhr); }
+        });
+    }
+
+    // Finalize archival: save history, update module date, reset status
     function finalizeArchival() {
         const totalSeconds = ((Date.now() - overallStart) / 1000).toFixed(2);
         $('#total-time').text(`Total archival time: ${totalSeconds} seconds`);
 
-        // Save history if we have any results
         if (tableResults.length > 0) {
             $.ajax({
                 url: '/api/save_archival_history/' + moduleId + '/',
@@ -236,7 +246,6 @@ startTimers();
             });
         }
 
-        // Update module date only if all tables succeeded and all were processed
         if (totalSuccess && allTablesProcessed) {
             $.ajax({
                 url: '/api/update_module_date/' + moduleId + '/',
@@ -247,144 +256,156 @@ startTimers();
                     console.log('Module last archival date updated to ' + archivalDate);
                     button.setAttribute('data-last', archivalDate);
                     $(button).closest('tr').find('td:eq(1)').text(archivalDate);
+                    resetModuleStatus();
+                },
+                error: function(xhr) {
+                    console.error('Failed to update module date', xhr);
+                    resetModuleStatus();
                 }
             });
+        } else {
+            resetModuleStatus();
         }
     }
 
-    $.getJSON('/api/get_tables/' + moduleId + '/', function(tables) {
-        if (tables.length === 0) {
-            $('#progressContent').html('<p>No tables configured for this module.</p>');
-            finalizeArchival();
-            return;
-        }
+    // Load the list of tables for this module
+    $.getJSON('/api/get_tables/' + moduleId + '/')
+        .done(function(tables) {
+            if (tables.length === 0) {
+                $('#progressContent').html('<p>No tables configured for this module.</p>');
+                finalizeArchival();
+                return;
+            }
 
-        // Build the table UI
-        var html = '<table class="table table-sm">';
-        html += '<thead><tr><th>Table</th><th>Count</th><th>Status</th><th>Time (s)</th></tr></thead><tbody>';
-        tables.forEach(function(t) {
-            html += '<tr id="table-' + t.id + '">';
-            html += '<td>' + (t.table_name || '') + '</td>';
-            html += '<td id="count-' + t.id + '">—</td>';
-            html += '<td><span class="badge bg-secondary" id="status-' + t.id + '">Pending</span></td>';
-            html += '<td id="time-' + t.id + '">—</td>';
-            html += '</tr>';
-        });
-        html += '</tbody></table>';
-        html += '<div id="total-time" class="mt-2 fw-bold"></div>';
-        $('#progressContent').html(html);
+            // Build the progress table UI
+            var html = '<table class="table table-sm">';
+            html += '<thead><tr><th>Table</th><th>Count</th><th>Status</th><th>Time (s)</th></tr></thead><tbody>';
+            tables.forEach(function(t) {
+                html += '<tr id="table-' + t.id + '">';
+                html += '<td>' + (t.table_name || '') + '</td>';
+                html += '<td id="count-' + t.id + '">—</td>';
+                html += '<td><span class="badge bg-secondary" id="status-' + t.id + '">Pending</span></td>';
+                html += '<td id="time-' + t.id + '">—</td>';
+                html += '</tr>';
+            });
+            html += '</tbody><tr>';
+            html += '<div id="total-time" class="mt-2 fw-bold"></div>';
+            $('#progressContent').html(html);
 
-        // Step 1: Get counts for each table
-        var countPromises = [];
-        tables.forEach(function(t) {
-            var countCell = $('#count-' + t.id);
-            var statusSpan = $('#status-' + t.id);
-            statusSpan.removeClass('bg-secondary').addClass('bg-info').text('Counting...');
-            var promise = $.getJSON('/api/count_table/' + t.id + '/', { archival_date: archivalDate })
-                .done(function(data) {
-                    if (data.status === 'success') {
-                        countCell.text(data.count);
-                        t.count = data.count;
-                        statusSpan.removeClass('bg-info').addClass('bg-secondary').text('Pending');
-                    } else {
+            // Get row counts for each table
+            var countPromises = [];
+            tables.forEach(function(t) {
+                var countCell = $('#count-' + t.id);
+                var statusSpan = $('#status-' + t.id);
+                statusSpan.removeClass('bg-secondary').addClass('bg-info').text('Counting...');
+                var promise = $.getJSON('/api/count_table/' + t.id + '/', { archival_date: archivalDate })
+                    .done(function(data) {
+                        if (data.status === 'success') {
+                            countCell.text(data.count);
+                            t.count = data.count;
+                            statusSpan.removeClass('bg-info').addClass('bg-secondary').text('Pending');
+                        } else {
+                            countCell.text('Error');
+                            statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
+                            t.count = 0;
+                        }
+                    })
+                    .fail(function() {
                         countCell.text('Error');
                         statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
                         t.count = 0;
+                    });
+                countPromises.push(promise);
+            });
+
+            // After all counts are loaded, start the archival process table by table
+            $.when.apply($, countPromises).then(function() {
+                var index = 0;
+                function runNext() {
+                    if (index >= tables.length) {
+                        allTablesProcessed = true;
+                        finalizeArchival();
+                        return;
                     }
-                })
-                .fail(function() {
-                    countCell.text('Error');
-                    statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
-                    t.count = 0;
-                });
-            countPromises.push(promise);
-        });
+                    var table = tables[index];
+                    var statusSpan = $('#status-' + table.id);
+                    var timeCell = $('#time-' + table.id);
+                    statusSpan.removeClass('bg-secondary').addClass('bg-warning').text('Running...');
+                    var tableStart = Date.now();
 
-        $.when.apply($, countPromises).then(function() {
-            var index = 0;
-
-            function runNext() {
-                if (index >= tables.length) {
-                    allTablesProcessed = true;
-                    finalizeArchival();
-                    return;
-                }
-
-                var table = tables[index];
-                var statusSpan = $('#status-' + table.id);
-                var timeCell = $('#time-' + table.id);
-                statusSpan.removeClass('bg-secondary').addClass('bg-warning').text('Running...');
-                var tableStart = Date.now();
-
-                $.ajax({
-                    url: '/api/run_script/' + table.id + '/',
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrftoken },
-                    data: { archival_date: archivalDate },
-                    success: function(response) {
-                        const elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
-                        timeCell.text(elapsed);
-                        var tableName = table.table_name || $('#table-' + table.id + ' td:first').text();
-                        if (response.status === 'success') {
-                            var rows = response.rows_archived || 0;
-                            var rowsInserted = response.rows_inserted || 0;
-                            var rowsDeleted = response.rows_deleted || 0;
-                            var rowsMerged = response.rows_merged || 0;
-                            statusSpan.removeClass().addClass('badge bg-success').text('Success');
-                            $('#count-' + table.id).text(rows + ' / ' + (table.count || 0));
-                            tableResults.push({
-                                table_name: tableName,
-                                row_archived: rows,
-                                row_inserted: rowsInserted,
-                                row_deleted: rowsDeleted,
-                                rows_merged: rowsMerged,
-                                execution_time: parseFloat(elapsed),
-                                status: 'success',
-                                error_message: ''
-                            });
-                            index++;
-                            runNext();
-                        } else {
+                    $.ajax({
+                        url: '/api/run_script/' + table.id + '/',
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': csrftoken },
+                        data: { archival_date: archivalDate },
+                        success: function(response) {
+                            var elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
+                            timeCell.text(elapsed);
+                            var tableName = table.table_name || $('#table-' + table.id + ' td:first').text();
+                            if (response.status === 'success') {
+                                var rows = response.rows_archived || 0;
+                                var rowsInserted = response.rows_inserted || 0;
+                                statusSpan.removeClass().addClass('badge bg-success').text('Success');
+                                $('#count-' + table.id).text(rowsInserted + ' / ' + (table.count || 0));
+                                tableResults.push({
+                                    table_name: tableName,
+                                    row_archived: rows,
+                                    row_inserted: rowsInserted,
+                                    row_deleted: response.rows_deleted || 0,
+                                    rows_merged: response.rows_merged || 0,
+                                    execution_time: parseFloat(elapsed),
+                                    status: 'success',
+                                    error_message: ''
+                                });
+                                index++;
+                                runNext();
+                            } else {
+                                statusSpan.removeClass().addClass('badge bg-danger').text('Error');
+                                totalSuccess = false;
+                                tableResults.push({
+                                    table_name: tableName,
+                                    row_count: 0,
+                                    execution_time: parseFloat(elapsed),
+                                    status: 'error',
+                                    error_message: response.error || 'Unknown error'
+                                });
+                                finalizeArchival();
+                            }
+                        },
+                        error: function(xhr, status, err) {
+                            var elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
+                            timeCell.text(elapsed);
                             statusSpan.removeClass().addClass('badge bg-danger').text('Error');
                             totalSuccess = false;
+                            var tableName = table.table_name || $('#table-' + table.id + ' td:first').text();
                             tableResults.push({
                                 table_name: tableName,
                                 row_count: 0,
                                 execution_time: parseFloat(elapsed),
                                 status: 'error',
-                                error_message: response.error || 'Unknown error'
+                                error_message: err || 'AJAX error'
                             });
-                            // Stop: do not call runNext
-                            finalizeArchival();  // save history immediately
+                            finalizeArchival();
                         }
-                    },
-                    error: function(xhr, status, err) {
-                        const elapsed = ((Date.now() - tableStart) / 1000).toFixed(2);
-                        timeCell.text(elapsed);
-                        statusSpan.removeClass().addClass('badge bg-danger').text('Error');
-                        totalSuccess = false;
-                        var tableName = table.table_name || $('#table-' + table.id + ' td:first').text();
-                        tableResults.push({
-                            table_name: tableName,
-                            row_count: 0,
-                            execution_time: parseFloat(elapsed),
-                            status: 'error',
-                            error_message: err || 'AJAX error'
-                        });
-                        // Stop
-                        finalizeArchival();  // save history immediately
-                    }
-                });
+                    });
+                }
+                runNext();
+            }).fail(function() {
+                finalizeArchival();
+            });
+        })
+        .fail(function(xhr) {
+            // This handles the case where the module is already locked
+            if (xhr.status === 400 && xhr.responseJSON && xhr.responseJSON.error) {
+                $('#progressContent').html('<div class="alert alert-warning">' + xhr.responseJSON.error + '</div>');
+            } else {
+                $('#progressContent').html('<div class="alert alert-danger">Failed to load tables. Please try again.</div>');
             }
-            runNext();
-        }).fail(function() {
-            // If counting fails, still finalize (no tables processed)
-            finalizeArchival();
+            // No archival started, so we just close the modal after a few seconds
+            setTimeout(function() {
+                modal.hide();
+            }, 3000);
         });
-    }).fail(function() {
-        $('#progressContent').html('<p class="text-danger">Failed to load tables.</p>');
-        finalizeArchival();
-    });
 }
 //     function startProcess(button, moduleId, moduleName, archivalDate) {
 //     const overallStart = Date.now();
