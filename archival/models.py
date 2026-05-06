@@ -113,8 +113,8 @@ class AuditLog(models.Model):
         ('ERROR', 'Error'),
     )
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
-    module = models.CharField(max_length=100, blank=True, null=True)   
+    action = models.CharField(max_length=50, choices=ACTION_CHOICES)
+    module = models.CharField(max_length=200, blank=True, null=True)   
     object_id = models.IntegerField(null=True, blank=True)             
     details = models.TextField(blank=True, null=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)

@@ -29,7 +29,8 @@ def archive_module(module_id, archival_date):
 
 def archive_table_batch(table, archival_date, user=None):
     temp_table_name = f"{table.table_name}1_{uuid.uuid4().hex}"
-    Archival_cutoff_date = table.module.application.archival_cutoff_date
+    Archival_cutoff_date = table.module.application.max_date
+    print(f"Value: {Archival_cutoff_date}, Type: {type(Archival_cutoff_date)}")
     app = table.module.application
     if not app.src_conn:
         return {'status': 'error', 'error': 'Missing source connection'}
@@ -134,11 +135,12 @@ def archive_table_batch(table, archival_date, user=None):
                 # src_conn.commit()        
             
                 agg_acct_tran=f"""MERGE ACCT_TRAN AS TARGET USING (SELECT    
-                    TOTAL_AMNT AS AMNT, TOTAL_AMNT_BASE AS AMNT_BASE_CRCY,  TOTAL_AMNT_FRGN AS AMNT_FRGN_CRCY,'00000' AS AMNT_TYPE_CODE,TOTAL_AMNT_BASE/replace(isnull(TOTAL_AMNT,1),0,1) AS XCHG_RATE,    
+                    TOTAL_AMNT AS AMNT, TOTAL_AMNT_BASE AS AMNT_BASE_CRCY,  TOTAL_AMNT_FRGN AS AMNT_FRGN_CRCY,'00000' AS AMNT_TYPE_CODE,
+                    TOTAL_AMNT_BASE / ISNULL(NULLIF(TRY_CAST(TOTAL_AMNT AS FLOAT), 0), 1) AS EXCH_RATE,    
                     CASE WHEN A.SUB_OPRN_TYPE='00002' then ACCT_NO else '00009999' end AS DEBT_ACCT,  
                     CASE WHEN A.SUB_OPRN_TYPE='00001' then ACCT_NO else '00009999' end AS CRDT_ACCT,  
                     ISNULL(C.BP_MAIN_ID,9999) AS BSNS_PRTN_ID, '00000' AS BP_TYPE,'00014' AS OPRN_TYPE, A.SUB_OPRN_TYPE AS SUB_OPRN_TYPE,  
-                    cast({Archival_cutoff_date} as date) AS TRAN_DATE, {tran_type_code} AS TRAN_TYPE_CODE, C.ACCT_ID  AS TRAN_TYPE_ID,ISNULL(C.CURR_ID,'00003') CRCY_CODE,   
+                    '{Archival_cutoff_date.isoformat()}' AS TRAN_DATE, {tran_type_code} AS TRAN_TYPE_CODE, C.ACCT_ID  AS TRAN_TYPE_ID,ISNULL(C.CURR_ID,'00003') CRCY_CODE,   
                     '00002' AS SRCE_TYPE_CODE, '00004' AS TRGT_TYPE_CODE, 47 AS SESSION_ID, 'DATA_ARCH' AS SESSION_CODE, 77 AS CREATED_BY,  
                     GETDATE() AS CREATED_ON, NULL AS UPDATED_BY,NULL AS UPDATED_ON,NULL AS IS_POSTED_TO_ACCT, cast(getdate() as date) AS BSNS_OPRN_DATE ,
                     1 AS IS_ACTIVE,0 IS_DELETED, NULL Reference_Number
