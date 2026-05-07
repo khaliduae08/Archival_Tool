@@ -136,7 +136,7 @@ def archive_table_batch(table, archival_date, user=None):
             
                 agg_acct_tran=f"""MERGE ACCT_TRAN AS TARGET USING (SELECT    
                     TOTAL_AMNT AS AMNT, TOTAL_AMNT_BASE AS AMNT_BASE_CRCY,  TOTAL_AMNT_FRGN AS AMNT_FRGN_CRCY,'00000' AS AMNT_TYPE_CODE,
-                    TOTAL_AMNT_BASE / ISNULL(NULLIF(TRY_CAST(TOTAL_AMNT AS FLOAT), 0), 1) AS EXCH_RATE,    
+                    TOTAL_AMNT_BASE / ISNULL(NULLIF(TRY_CAST(TOTAL_AMNT AS FLOAT), 0), 1) AS XCHG_RATE,    
                     CASE WHEN A.SUB_OPRN_TYPE='00002' then ACCT_NO else '00009999' end AS DEBT_ACCT,  
                     CASE WHEN A.SUB_OPRN_TYPE='00001' then ACCT_NO else '00009999' end AS CRDT_ACCT,  
                     ISNULL(C.BP_MAIN_ID,9999) AS BSNS_PRTN_ID, '00000' AS BP_TYPE,'00014' AS OPRN_TYPE, A.SUB_OPRN_TYPE AS SUB_OPRN_TYPE,  
