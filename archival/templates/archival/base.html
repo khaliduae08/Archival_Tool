@@ -96,10 +96,10 @@
                             {% if user.is_superuser or user.groups.all.0.name == 'admin' %}
                                 <a href="{% url 'connection_list' %}" class="menu-item">Database Connections</a>
                                 <a href="{% url 'application_list' %}" class="menu-item">Manage Applications</a>
-                                <a href="{% url 'user_list' %}" class="menu-item">Users</a>
-                                <a href="{% url 'audit_log' %}" class="menu-item">Audit Log</a>
+                                <a href="{% url 'user_list' %}" class="menu-item">Users</a>                                
                                 <!-- <a href="{% url 'group_list' %}" class="menu-item">Groups</a> -->
                             {% endif %}
+                            <a href="{% url 'audit_log' %}" class="menu-item">Audit Log</a>
                         </div>
                     </div>
                 </div>
