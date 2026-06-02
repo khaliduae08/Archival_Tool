@@ -1,4 +1,5 @@
 import logging
+from unittest import result
 import uuid
 from django.db import connection
 from .models import ArchivalTable,ArchivalModule, AuditLog
@@ -93,14 +94,14 @@ def archive_table_batch(table, archival_date, user=None):
                                         SELECT TOP 1 '{app_name}_ARCHIVAL','{app_name}_ARCHIVAL','00002','00003','00004','{app_name} ARCHIVAL',0,1,'574805','{app_name}ARCHIVALSESSION',47,getdate()  
                                         where not exists (SELECT 1 FROM [TRAN] WHERE TRAN_NAME='{app_name}_ARCHIVAL')"""
                 
-                max_code_query = cur.execute(f"""SELECT '000'+cast(MAX(CODE)+1 as varchar) FROM [OPRTN_TYPE] WHERE CODE LIKE '{app_name}ARCHIVAL%'""").fetchone()[0]
-                
+                max_code_query = cur.execute("""SELECT RIGHT('00000' + CAST(ISNULL(MAX(CAST(CODE AS INT)),0) + 1 AS VARCHAR), 5) FROM [OPRTN_TYPE]""").fetchone()[0]
+
                 get_oprn_type_code=f"""SELECT CODE FROM [OPRTN_TYPE] WHERE NAME ='{app_name}ARCHIVAL'"""
-                insert_oprn_type_code=f"""INSERT INTO [OPRTN_TYPE] (CODE,NAME,NAME_LOCAL,DESC,IS_DELETED,IS_ACTIVE,SESSION_ID,SESSION_CODE,CREATED_BY,CREATED_ON)  
-                                        SELECT {max_code_query},'{app_name}ARCHIVAL','{app_name}ARCHIVAL','{app_name}Archival',0,1,'77','ARCHIVALOPRNSESSION',47,getdate()  
+                insert_oprn_type_code=f"""INSERT INTO [OPRTN_TYPE] (CODE,NAME,NAME_LOCAL,[DESC],IS_DELETED,IS_ACTIVE,SESSION_ID,SESSION_CODE,CREATED_BY,CREATED_ON)  
+                                        SELECT TOP 1 '{max_code_query}','{app_name}ARCHIVAL','{app_name}ARCHIVAL','{app_name}Archival',0,1,'77','ARCHIVALOPRNSESSION',47,getdate()  
                                         where not exists (SELECT 1 FROM [OPRTN_TYPE] WHERE NAME='{app_name}ARCHIVAL')"""
                 
-            # print(insert_tran_type_code)
+                # print(insert_oprn_type_code)
             # with src_conn.cursor() as cur:
                 cur.execute(insert_tran_type_code) 
                 cur.execute(insert_oprn_type_code)                              
@@ -149,8 +150,8 @@ def archive_table_batch(table, archival_date, user=None):
                     CASE WHEN A.SUB_OPRN_TYPE='00002' then ACCT_NO else '00009999' end AS DEBT_ACCT,  
                     CASE WHEN A.SUB_OPRN_TYPE='00001' then ACCT_NO else '00009999' end AS CRDT_ACCT,  
                     ISNULL(C.BP_MAIN_ID,9999) AS BSNS_PRTN_ID, (SELECT TOP 1 BP_TYPE FROM dbo.BP_MAIN BP WHERE BP.BP_MAIN_ID=C.BP_MAIN_ID) AS BP_TYPE, 
-                    {oprn_type_code} AS OPRN_TYPE, A.SUB_OPRN_TYPE AS SUB_OPRN_TYPE,  
-                    '{Archival_cutoff_date.isoformat()}' AS TRAN_DATE, {tran_type_code} AS TRAN_TYPE_CODE, C.ACCT_ID  AS TRAN_TYPE_ID,ISNULL(C.CURR_ID,'00003') CRCY_CODE,   
+                    '{oprn_type_code}' AS OPRN_TYPE, A.SUB_OPRN_TYPE AS SUB_OPRN_TYPE,  
+                    '{Archival_cutoff_date.isoformat()}' AS TRAN_DATE, '{tran_type_code}' AS TRAN_TYPE_CODE, C.ACCT_ID  AS TRAN_TYPE_ID,ISNULL(C.CURR_ID,'00003') CRCY_CODE,   
                     '00002' AS SRCE_TYPE_CODE, '00004' AS TRGT_TYPE_CODE, 47 AS SESSION_ID, 'DATA_ARCH' AS SESSION_CODE, 77 AS CREATED_BY,  
                     GETDATE() AS CREATED_ON, NULL AS UPDATED_BY,NULL AS UPDATED_ON,NULL AS IS_POSTED_TO_ACCT, cast(getdate() as date) AS BSNS_OPRN_DATE ,
                     1 AS IS_ACTIVE,0 IS_DELETED, NULL Reference_Number
@@ -183,11 +184,22 @@ def archive_table_batch(table, archival_date, user=None):
             #                 cur.execute(final_delete)
             #                 # src_conn.commit()
             if delete_sql:
-            # with src_conn.cursor() as src_cursor:
                 cur.execute(final_delete)
-                rows_deleted = cur.rowcount
+    
+                if 'SELECT @@ROWCOUNT' in final_delete.upper():
+                    cur.nextset()
+                    cur.nextset()
+                    result = cur.fetchone()
+                    rows_deleted = result[0] if result else 0
+                    if cur.nextset():  
+                        None
+                else:        
+                    rows_deleted = cur.rowcount  
             else:
                 rows_deleted = 0
+
+            # print(f"Delete SQL: {final_delete}")
+            # print(f"Rows deleted: {rows_deleted} and Rows inserted: {row_inserted}")
 
         # with src_conn.cursor() as cur:
             cur.execute(f"SELECT COUNT(*) FROM {temp_table_name}")

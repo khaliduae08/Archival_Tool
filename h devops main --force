@@ -1,0 +1,38 @@
+[33m2d9ab82[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Account Summary BP_TYPE correction
+[33m9665366[m Account Summary EXCH Rate issue
+[33m7b2f0e4[m Account Summary EXCH Rate issue
+[33mce30966[m Account Summary fix
+[33m23a8d6d[m Audit log
+[33m9d649b5[m Audit log
+[33m51be8e8[m Application removed volume
+[33md7a8be7[m Application modification
+[33m8d64443[m Added validation on Connection
+[33me7ad2ad[m Email and Exception handling
+[33mf7fdad3[m messaging alert
+[33m0665075[m Search added on each Module
+[33mc3f77f6[m Modified User management
+[33m2cce9f9[m Update base.html
+[33mc6b51eb[m Add proper .gitignore to ignore venv and pycache
+[33m3f4eea2[m Ignore venv, __pycache__, and other generated files
+[33m748f99b[m Fully remove venv from Git index
+[33m89da94b[m Ignore venv folder
+[33m0bb03b7[m Add .gitignore to ignore venv and cache files
+[33m771199b[m Add .gitignore to ignore venv folder
+[33m9d32f34[m Ignore venv folder
+[33m8e8817f[m Stop tracking venv folder
+[33m3ccae12[m Removed Identity
+[33m14b1bbb[m removed temp table
+[33ma110eaf[m removed unwanted table
+[33m8744258[m Permisssion and Transaction History issues fixed
+[33ma689e48[m Removed Default from Delete
+[33m29a1164[m Fixed Connection issue
+[33m6d75ee8[m Tranaction Details history
+[33m33af8ae[m Archival cutoff date
+[33m9ed4ecf[m Archival Time
+[33m6343cfa[m Core Module and Account Summary
+[33m1edef1d[m Remove venv from repository and new chnages on user, Groups and other module
+[33m8834cf2[m static file
+[33md6abe16[m settings
+[33m67867f2[m requirement
+[33mce92a5f[m Add purpose description for archival data tool
+[33m27815d6[m Archival tool
