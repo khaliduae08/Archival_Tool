@@ -1,0 +1,42 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2 class="h4 mb-3">{{ action }} Table </h2>
+<form method="post">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label>Table Name</label>
+        <input type="text" name="table_name" class="form-control" value="{{ table.table_name|default:'' }}" required>
+    </div>    
+    <div class="mb-3">
+        <label>Select Script (SQL)</label>
+        <textarea name="select_script" class="form-control" rows="5" required>{{ table.select_script|default:'' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label>Insert Script (SQL)</label>
+        <textarea name="insert_script" class="form-control" rows="5" required>{{ table.insert_script|default:'' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label>Delete Script (SQL)</label>
+        <textarea name="delete_script" class="form-control" rows="5" >{{ table.delete_script|default:'' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label>Select Session</label>
+        <input type="text" name="select_session" class="form-control" value="{{ table.select_session|default:'' }}" required>
+    </div>
+    <div class="mb-3">
+        <label>Insert Session</label>
+        <input type="text" name="insert_session" class="form-control" value="{{ table.insert_session|default:'' }}" required>
+    </div>
+    <div class="mb-3">
+        <label>Batch Size</label>
+        <input type="number" name="batch_size" class="form-control" value="{{ table.batch_size|default:1000 }}" required>
+    </div>
+    <div class="mb-3">
+        <label>Archival Date</label>
+        <input type="date" name="archival_date" class="form-control" value="{{ table.archival_date|default:'' }}" required>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 't24_table_list' application.id %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

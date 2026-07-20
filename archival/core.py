@@ -8,6 +8,16 @@ from .utils import get_connection
 
 logger = logging.getLogger(__name__)
 
+def build_conn_str(db_conn):
+    """Build pyodbc connection string from DatabaseConnection instance."""
+    return (
+        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+        f"SERVER={db_conn.server};"
+        f"DATABASE={db_conn.database};"
+        f"UID={db_conn.username};"
+        f"PWD={db_conn.password};"
+    )
+
 def archive_module(module_id, archival_date):
     module = ArchivalModule.objects.get(id=module_id)
     tables = module.tables.all().order_by('sequence')
@@ -29,14 +39,15 @@ def archive_module(module_id, archival_date):
     return {'status': 'success' if total_success else 'partial', 'results': results}
 
 def archive_table_batch(table, archival_date, user=None):
-    temp_table_name = f"{table.table_name}1_{uuid.uuid4().hex}"
+    temp_table_name = f"{table.table_name.strip()}1_{uuid.uuid4().hex}"
+    print (temp_table_name)
     Archival_cutoff_date = table.module.application.max_date
-    print(f"Value: {Archival_cutoff_date}, Type: {type(Archival_cutoff_date)}")
+    # print(f"Value: {Archival_cutoff_date}, Type: {type(Archival_cutoff_date)}")
     app = table.module.application
     if not app.src_conn:
         return {'status': 'error', 'error': 'Missing source connection'}
 
-    src_conn = get_connection(app.src_conn.name)
+    src_conn = get_connection(app.src_conn)
     src_conn.autocommit = False
 
     try:    
@@ -62,7 +73,7 @@ def archive_table_batch(table, archival_date, user=None):
                 "IN ({ids})",
                 f"IN (SELECT RECID FROM {temp_table_name})"
             )
-
+        
         with src_conn.cursor() as cur:
             cur.execute(f"""
                 CREATE TABLE {temp_table_name} (
@@ -75,14 +86,15 @@ def archive_table_batch(table, archival_date, user=None):
                     INSERT INTO {temp_table_name} (RECID) 
                     SELECT DISTINCT * FROM ({select_sql}) AS src
                 """)
-           
+            print(f"Temp Table Created {temp_table_name}: {cur.rowcount}")
 
         # with src_conn.cursor() as cur:
             cur.execute("BEGIN TRANSACTION")
             cur.execute(final_insert)
             row_inserted = cur.rowcount
             # src_conn.commit()
-        
+            print(f"Rows inserted {table.table_name}: {row_inserted}")
+
             rows_merged = 0
             if table.acct_sum == 'Y':
                 temp_acct_tran=f"{table.table_name}2_{uuid.uuid4().hex}"
@@ -185,16 +197,25 @@ def archive_table_batch(table, archival_date, user=None):
             #                 # src_conn.commit()
             if delete_sql:
                 cur.execute(final_delete)
-    
-                if 'SELECT @@ROWCOUNT' in final_delete.upper():
-                    cur.nextset()
-                    cur.nextset()
+                
+                if 'SELECT @@ROWCOUNT' in final_delete.upper():                    
+                    sql_before_rowcount = final_delete.upper().split('SELECT @@ROWCOUNT')[0]
+     
+                    skip_count = (
+                        sql_before_rowcount.count('ALTER TABLE') +
+                        sql_before_rowcount.count('DELETE ')
+                    )
+
+                    for _ in range(skip_count):
+                        cur.nextset()
+
                     result = cur.fetchone()
                     rows_deleted = result[0] if result else 0
-                    if cur.nextset():  
+
+                    while cur.nextset():
                         None
-                else:        
-                    rows_deleted = cur.rowcount  
+                else:
+                    rows_deleted = cur.rowcount
             else:
                 rows_deleted = 0
 

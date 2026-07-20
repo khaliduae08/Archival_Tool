@@ -6,22 +6,28 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.db.models import Q, Max
 
 from archival.core import archive_module, archive_table_batch
+from archival.t24_core import run_t24_table
 from .models import Application, ArchivalModule, ArchivalTable, AuditLog, DatabaseConnection, ArchivalTransaction, ArchivalTransactionDetail
 from .utils import get_connection, notify_application_completion, run_test_script
 from django.utils.dateparse import parse_date
-from datetime import date
+from datetime import date, datetime
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib import messages
 from django.contrib.auth.models import Permission
 from django.contrib.auth import logout
-
 from archival import models
+import threading
+from .job_tracker import create_job, update_job, get_job
+
+
+@login_required
+def session_keepalive(request):
+    request.session.modified = True  
+    return JsonResponse({'status': 'ok'})
 
 
 def custom_logout(request):
@@ -484,13 +490,29 @@ def application_add(request):
 
 @login_required
 def application_edit(request, pk):
-    app = get_object_or_404(Application, pk=pk)
+    app = get_object_or_404(Application, pk=pk)    
+    modules=ArchivalModule.objects.filter(application=app)    
     if request.method == 'POST':
         try:
             app.name = request.POST.get('name')
             app.src_conn_id = request.POST.get('src_conn') or None
             app.dstn_conn_id = request.POST.get('dstn_conn') or None
             app.max_date = request.POST.get('max_date')
+
+            max_date_str = request.POST.get('max_date')
+            new_max_date = datetime.strptime(max_date_str, '%Y-%m-%d').date()
+            result = modules.aggregate(Max('last_archival_date'))
+            last_archival_date = result['last_archival_date__max']
+            # print(f"Last archival date of modules: {last_archival_date}")
+            if last_archival_date and new_max_date < last_archival_date:
+                messages.error(request, f'Error updating application: max_date cannot be earlier than the last archival date ({last_archival_date}) of its modules.')
+                return render(request, 'archival/application_form.html', {
+                    'action': 'Edit',
+                    'app': app,
+                    'sources': DatabaseConnection.objects.all(),
+                    'dests': DatabaseConnection.objects.all(),
+                    'transfer_choices': Application.TRANSFER_CHOICES
+                })
             app.save()
             if request.user:
                 AuditLog.objects.create(
@@ -812,7 +834,7 @@ def get_table_count(request, table_id):
     if request.method != 'GET':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     table = get_object_or_404(ArchivalTable, id=table_id)
-    archival_date = request.GET.get('archival_date')
+    archival_date = request.GET.get('archival_date')    
     if not archival_date:
         if request.user:
             AuditLog.objects.create(
@@ -829,7 +851,7 @@ def get_table_count(request, table_id):
 
     app = table.module.application
     try:
-        src_conn = get_connection(app.src_conn.name)
+        src_conn = get_connection(app.src_conn)
         with src_conn.cursor() as cursor:
             cursor.execute(count_sql)
             count = cursor.fetchone()[0]
@@ -1015,3 +1037,208 @@ def audit_log(request):
             Q(details__icontains=search)
            )
     return render(request, 'archival/audit_log.html', {'logs': logs, 'search': search})
+
+
+def t24_table_list(request, app_id):
+    application = get_object_or_404(Application, id=app_id)
+    tables = application.t24_tables.all()
+    search = request.GET.get('search', '')
+    if search:
+        tables = tables.filter(table_name__icontains=search)
+    return render(request, 't24/t24_table_list.html', {'application': application, 'tables': tables})
+
+def t24_table_add(request, app_id):
+    application = get_object_or_404(Application, id=app_id)
+    if request.method == 'POST':
+        table_name = request.POST.get('table_name')
+        select_script = request.POST.get('select_script')
+        insert_script = request.POST.get('insert_script')
+        delete_script = request.POST.get('delete_script')
+        select_session = request.POST.get('select_session')
+        insert_session = request.POST.get('insert_session')
+        batch_size = request.POST.get('batch_size')
+        archival_date = request.POST.get('archival_date')
+        try:
+            table = models.T24Table.objects.create(
+                application=application,
+                table_name=table_name,
+                select_script=select_script,
+                insert_script=insert_script,
+                delete_script=delete_script,
+                select_session=select_session,
+                insert_session=insert_session,
+                batch_size=batch_size,
+                archival_date=archival_date
+            )
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Add T24 Table',
+                module='T24 Table Management',
+                details=f"Added T24 table '{table.table_name}' to application '{application.name}'",
+                success=True
+                )
+            messages.success(request, 'Table added.')
+        except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='Add T24 Table',
+                    module='T24 Table Management',
+                    details=f"Error adding T24 table '{table_name}' to application '{application.name}': {str(e)}",
+                    success=False
+                )
+            messages.error(request, f'Error adding table: {e}')
+        return redirect('t24_table_list', app_id=application.id)
+    return render(request, 't24/t24_table_form.html', {'application': application, 'action': 'Add'})
+
+def t24_table_edit(request, app_id, pk):
+    table = get_object_or_404(models.T24Table, pk=pk, application_id=app_id)
+    if request.method == 'POST':
+        table.table_name = request.POST.get('table_name')
+        table.select_script = request.POST.get('select_script')
+        table.insert_script = request.POST.get('insert_script')
+        table.delete_script = request.POST.get('delete_script')
+        table.select_session = request.POST.get('select_session')
+        table.insert_session = request.POST.get('insert_session')
+        table.batch_size = request.POST.get('batch_size')
+        table.archival_date = request.POST.get('archival_date')
+        try:
+            table.save()
+            if request.user:
+                AuditLog.objects.create(
+                user=request.user,
+                action='Edit T24 Table',
+                module='T24 Table Management',
+                details=f"Edited T24 table '{table.table_name}' in application '{table.application.name}'",
+                success=True
+                )
+            messages.success(request, 'Table updated.')
+        except Exception as e:
+            if request.user:
+                AuditLog.objects.create(
+                    user=request.user,
+                    action='Edit T24 Table',
+                    module='T24 Table Management',
+                    details=f"Error editing T24 table '{table.table_name}' in application '{table.application.name}': {str(e)}",
+                    success=False
+                )
+            messages.error(request, f'Error updating table: {e}')
+        
+        return redirect('t24_table_list', app_id=app_id)
+    return render(request, 't24/t24_table_form.html', {'application': table.application, 'table': table, 'action': 'Edit'})
+
+def t24_table_delete(request, app_id, pk):
+    table = get_object_or_404(models.T24Table, pk=pk, application_id=app_id)
+    try:
+        table.delete()
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete T24 Table',
+                module='T24 Table Management',
+                details=f"Deleted T24 table '{table.table_name}' from application '{table.application.name}'",
+                success=True
+            )
+        messages.success(request, 'Table deleted.')
+    except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Delete T24 Table',
+                module='T24 Table Management',
+                details=f"Error deleting T24 table '{table.table_name}' from application '{table.application.name}': {str(e)}",
+                success=False
+            )
+        messages.error(request, f'Error deleting table: {e}')
+    return redirect('t24_table_list', app_id=app_id)
+
+def t24_table_run(request, app_id, pk):
+    table = get_object_or_404(models.T24Table, pk=pk, application_id=app_id)
+    try:
+        print(f"Running T24 archival for table {table.table_name} in application {table.application.name}...")
+        result = run_t24_table(table, request.user)
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Run T24 Table',
+                module='T24 Table Management',
+                details=f"Executed T24 table '{table.table_name}' in application '{table.application.name}' with result: {result}",
+                success=True
+            )
+        messages.success(request, f'Table executed. Result: {result}')
+    except Exception as e:
+        if request.user:
+            AuditLog.objects.create(
+                user=request.user,
+                action='Run T24 Table',
+                module='T24 Table Management',
+                details=f"Error executing T24 table '{table.table_name}' in application '{table.application.name}': {str(e)}",
+                success=False
+            )
+        messages.error(request, f'Error executing table: {e}')
+    return redirect('t24_table_list', app_id=app_id)
+
+
+@login_required
+def t24_get_count(request, pk):
+    """GET — returns row count for a T24 table."""
+    table = get_object_or_404(models.T24Table, pk=pk)
+    try:
+        src_conn_str = (
+            f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+            f"SERVER={table.application.src_conn.server};"
+            f"DATABASE={table.application.src_conn.database};"
+            f"UID={table.application.src_conn.username};"
+            f"PWD={table.application.src_conn.password};"
+        )
+        date_str = table.archival_date.strftime('%Y%m%d')
+        count_sql = (
+            table.select_script
+            .replace("{archival_date}", date_str)
+        )
+        count_sql = f"SELECT COUNT(*) FROM ({count_sql}) AS sub"
+
+        conn = pyodbc.connect(src_conn_str)
+        cur  = conn.cursor()
+        cur.execute(count_sql)
+        count = cur.fetchone()[0]
+        conn.close()
+
+        return JsonResponse({'status': 'success', 'count': count})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@login_required
+def t24_run_script(request, pk):
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    table = get_object_or_404(models.T24Table, pk=pk)
+    row_count = request.POST.get('row_count')
+
+    job_id = str(uuid.uuid4())
+    create_job(job_id)
+
+    def background_job():
+        try:
+            result = run_t24_table(table, row_count, request.user, job_id=job_id)
+            update_job(job_id, 'done', result)
+        except Exception as e:
+            update_job(job_id, 'error', {'status': 'error', 'error': str(e)})
+
+    t = threading.Thread(target=background_job, daemon=True)
+    t.start()
+
+    return JsonResponse({'job_id': job_id, 'status': 'started'})
+
+
+
+@login_required
+def t24_job_status(request, job_id):
+    job = get_job(job_id)
+    if job is None:
+        return JsonResponse({'status': 'unknown'}, status=404)
+    return JsonResponse(job)

@@ -4,12 +4,26 @@ from mf_archival import settings
 from .models import AuditLog, DatabaseConnection, ArchivalModule
 from django.core.mail import send_mail
 
-def get_connection(conn_type):
-    """Return a pyodbc connection for the given type ('source' or 'destination')."""
-    try:
-        conn = DatabaseConnection.objects.get(name=conn_type)
-    except DatabaseConnection.DoesNotExist:
-        raise Exception(f"No {conn_type} connection configured.")
+# def get_connection(conn_type):
+#     """Return a pyodbc connection for the given type ('source' or 'destination')."""
+#     try:
+#         conn = DatabaseConnection.objects.get(database=conn_type)
+#     except DatabaseConnection.DoesNotExist:
+#         raise Exception(f"No {conn_type} connection configured.")
+
+#     conn_str = (
+#         f"DRIVER={{ODBC Driver 17 for SQL Server}};"
+#         f"SERVER={conn.server};"
+#         f"DATABASE={conn.database};"
+#         f"UID={conn.username};"
+#         f"PWD={conn.password};"
+#     )
+#     return pyodbc.connect(conn_str)
+
+def get_connection(conn):
+    
+    if not conn:
+        raise Exception("No database connection configured.")
 
     conn_str = (
         f"DRIVER={{ODBC Driver 17 for SQL Server}};"

@@ -2,11 +2,6 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class DatabaseConnection(models.Model):
-    CONN_TYPES = (
-        ('source', 'Source Database'),
-        ('destination', 'Destination Database'),
-    )
-    name = models.CharField(max_length=20, choices=CONN_TYPES, unique=True)
     server = models.CharField(max_length=255)
     database = models.CharField(max_length=255)
     username = models.CharField(max_length=255, blank=True, null=True)
@@ -125,3 +120,23 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ['-timestamp']
+
+
+class T24Table(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name='t24_tables')
+    table_name = models.CharField(max_length=200)
+    select_script = models.TextField(default='select * from', help_text="select script for source")
+    insert_script = models.TextField(default='insert into', help_text="insert script for destination")
+    delete_script = models.TextField(default='delete from', help_text="Delete script for destination")
+    select_session = models.PositiveSmallIntegerField(default=1, help_text="Number of parallel session for reading")
+    insert_session = models.PositiveSmallIntegerField(default=1, help_text="Number of parallel session for insert")
+    batch_size = models.PositiveIntegerField(default=1000, help_text="Number of records per batch")
+    archival_date = models.DateField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['application', 'table_name']
+
+    def __str__(self):
+        return f"{self.application.name} - {self.table_name}"

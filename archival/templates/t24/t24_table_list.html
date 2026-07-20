@@ -1,0 +1,367 @@
+{% extends "archival/base.html" %}
+
+{% block content %}
+<h2 class="h4 mb-3">Tables for Application: {{ application.name }}</h2>
+
+{% if user.is_superuser or user.groups.all.0.name == 'admin' %}
+<a href="{% url 't24_table_add' application.id %}" class="btn btn-success mb-3">Add New Table</a>
+{% endif %}
+
+<form method="get" class="mb-3">
+    <div class="input-group w-25">
+        <input type="text" name="search" class="form-control"
+               placeholder="Search by Table..."
+               value="{{ request.GET.search|default:'' }}">
+        <button class="btn btn-outline-secondary" type="submit">Search</button>
+    </div>
+</form>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Table Name</th>
+            <th>Select Script</th>
+            <th>Insert Script</th>
+            <th>Delete Script</th>
+            <th>Select Session</th>
+            <th>Insert Session</th>
+            <th>Batch Size</th>
+            <th>Archival Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for table in tables %}
+        <tr>
+            <td>{{ table.table_name }}</td>
+            <td><pre>{{ table.select_script|truncatechars:35 }}</pre></td>
+            <td><pre>{{ table.insert_script|truncatechars:35 }}</pre></td>
+            <td><pre>{{ table.delete_script|truncatechars:35 }}</pre></td>
+            <td>{{ table.select_session }}</td>
+            <td>{{ table.insert_session }}</td>
+            <td>{{ table.batch_size }}</td>
+            <td>{{ table.archival_date }}</td>
+            <td>
+                {% if user.is_superuser or user.groups.all.0.name == 'admin' %}
+                    <a href="{% url 't24_table_edit' application.id table.id %}"
+                       class="btn btn-sm btn-warning">Edit</a>
+                    <a href="{% url 't24_table_delete' application.id table.id %}"
+                       class="btn btn-sm btn-danger"
+                       onclick="return confirm('Delete this table?')">Delete</a>
+                    <button class="btn btn-sm btn-success"
+                            onclick="startT24Process({{ table.id }}, '{{ table.table_name }}')">
+                        Run
+                    </button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{% url 'application_list' %}" class="btn btn-secondary">Back to Applications</a>
+
+<!-- T24 Progress Modal -->
+<div class="modal fade" id="t24Modal" tabindex="-1"
+     aria-labelledby="t24ModalLabel" aria-hidden="true"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="t24ModalLabel">T24 Archival Progress</h5>
+                <button type="button" class="btn-close"
+                        data-bs-dismiss="modal" aria-label="Close"
+                        id="t24CloseBtn"></button>
+            </div>
+            <div class="modal-body">
+                <div id="t24Content">
+                    <p>Loading...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary d-none"
+                        id="t24RunBtn">Run Archival</button>
+                <button type="button" class="btn btn-secondary"
+                        data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+function startT24Process(tableId, tableName) {
+    // Reset modal state
+    $('#t24ModalLabel').text('T24 Archival — ' + tableName);
+    $('#t24Content').html('<p><span class="spinner-border spinner-border-sm"></span> Fetching row count...</p>');
+    $('#t24RunBtn').addClass('d-none').off('click');
+    $('#t24CloseBtn').prop('disabled', false);
+ 
+    var modal = new bootstrap.Modal(document.getElementById('t24Modal'));
+    modal.show();
+ 
+    // Step 1 — get count
+    $.getJSON('/api/t24_count/' + tableId + '/')
+        .done(function(data) {
+            if (data.status === 'success') {
+                $('#t24Content').html(
+                    '<table class="table table-sm">' +
+                    '<thead><tr><th>Table</th><th>Row Count</th><th>Status</th><th>Inserted</th><th>Deleted</th><th>Time (s)</th></tr></thead>' +
+                    '<tbody>' +
+                    '<tr id="t24-row-' + tableId + '">' +
+                    '<td>' + tableName + '</td>' +
+                    '<td>' + data.count.toLocaleString() + '</td>' +
+                    '<td><span class="badge bg-secondary" id="t24-status-' + tableId + '">Ready</span></td>' +
+                    '<td id="t24-inserted-' + tableId + '">—</td>' +
+                    '<td id="t24-deleted-' + tableId + '">—</td>' +
+                    '<td id="t24-time-' + tableId + '">—</td>' +
+                    '</tr>' +
+                    '</tbody></table>' +
+                    '<div id="t24-total" class="mt-2 fw-bold"></div>'
+                );
+ 
+                // Show Run button — pass the fetched count through
+                $('#t24RunBtn').removeClass('d-none').on('click', function() {
+                    runT24Table(tableId, tableName, data.count);
+                });
+            } else {
+                $('#t24Content').html(
+                    '<div class="alert alert-danger">Error fetching count: ' +
+                    (data.error || 'Unknown error') + '</div>'
+                );
+            }
+        })
+        .fail(function() {
+            $('#t24Content').html(
+                '<div class="alert alert-danger">Failed to fetch row count. Please try again.</div>'
+            );
+        });
+}
+ 
+// Tracks the active poll timer so a stray previous poll never overlaps a new run
+var t24PollTimer = null;
+ 
+function runT24Table(tableId, tableName, rowCount) {
+    // Lock the modal — long-running job is about to start
+    $('#t24RunBtn').prop('disabled', true).text('Running...');
+    $('#t24CloseBtn').prop('disabled', true);
+    $('#t24-status-' + tableId).removeClass().addClass('badge bg-warning').text('Running...');
+ 
+    // Pause idle-logout countdown and keep the Django session alive for the
+    // entire duration of the job, no matter how long it runs (hours/days)
+    pauseIdleTimers();
+    startHeartbeat();
+ 
+    var start = Date.now();
+ 
+    // ── Step 1: kick off the job — returns immediately with a job_id ──────────
+    $.ajax({
+        url: '/api/t24_run/' + tableId + '/',
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        data: { row_count: rowCount },
+        success: function(startResp) {
+            if (startResp.job_id) {
+                pollT24Job(tableId, startResp.job_id, start);
+            } else {
+                // Backend didn't return a job_id — treat as immediate failure
+                finishT24Run(tableId, start, {
+                    status: 'error',
+                    error: 'No job_id returned from server.'
+                });
+            }
+        },
+        error: function(xhr) {
+            finishT24Run(tableId, start, {
+                status: 'error',
+                error: 'Failed to start archival job. Please check server logs.'
+            });
+        }
+    });
+}
+ 
+// ── Step 2: poll job status every 15 seconds until done/error ────────────────
+function pollT24Job(tableId, jobId, start) {
+    if (t24PollTimer) {
+        clearInterval(t24PollTimer);
+    }
+ 
+    t24PollTimer = setInterval(function() {
+        $.getJSON('/api/t24_job_status/' + jobId + '/')
+            .done(function(job) {
+                // Keep showing elapsed time while still running
+                var elapsedRunning = ((Date.now() - start) / 1000).toFixed(2);
+                $('#t24-time-' + tableId).text(elapsedRunning);
+ 
+                // ── Live progress: inserted/deleted counts + chunk progress ──────
+                if (job.progress) {
+                    $('#t24-inserted-' + tableId).text(
+                        (job.progress.inserted || 0).toLocaleString()
+                    );
+                    $('#t24-deleted-' + tableId).text(
+                        (job.progress.deleted || 0).toLocaleString()
+                    );
+                    if (job.progress.total_chunks) {
+                        $('#t24-status-' + tableId)
+                            .removeClass().addClass('badge bg-warning')
+                            .text('Running (chunk ' + job.progress.chunk +
+                                  '/' + job.progress.total_chunks + ')');
+                    }
+                }
+ 
+                if (job.status === 'done' || job.status === 'error') {
+                    clearInterval(t24PollTimer);
+                    t24PollTimer = null;
+                    finishT24Run(tableId, start, job.result);
+                }
+                // status === 'running' → keep polling, do nothing else
+            })
+            .fail(function() {
+                // Transient network blip — don't kill the poll, just retry next tick
+                console.warn('Job status check failed, will retry...');
+            });
+    }, 15000); // poll every 15 seconds
+}
+ 
+// ── Step 3: final UI update once the job is actually done or errored ─────────
+function finishT24Run(tableId, start, response) {
+    var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+    $('#t24-time-' + tableId).text(elapsed);
+ 
+    if (response && response.status === 'success') {
+        $('#t24-status-' + tableId)
+            .removeClass().addClass('badge bg-success').text('Success');
+        $('#t24-inserted-' + tableId).text(
+            (response.rows_inserted || 0).toLocaleString()
+        );
+        $('#t24-deleted-' + tableId).text(
+            (response.rows_deleted || 0).toLocaleString()
+        );
+        $('#t24-total').html(
+            '<span class="text-success">Archival completed in ' +
+            elapsed + ' seconds</span>'
+        );
+    } else {
+        $('#t24-status-' + tableId)
+            .removeClass().addClass('badge bg-danger').text('Error');
+        $('#t24-total').html(
+            '<span class="text-danger">Error: ' +
+            ((response && response.error) || 'Unknown error') + '</span>'
+        );
+    }
+ 
+    // Re-enable close, hide run button, restore idle timers + stop heartbeat
+    $('#t24CloseBtn').prop('disabled', false);
+    $('#t24RunBtn').addClass('d-none').prop('disabled', false).text('Run Archival');
+    resumeIdleTimers();
+    stopHeartbeat();
+}
+</script>
+<!-- <script>
+function startT24Process(tableId, tableName) {
+    // Reset modal state
+    $('#t24ModalLabel').text('T24 Archival — ' + tableName);
+    $('#t24Content').html('<p><span class="spinner-border spinner-border-sm"></span> Fetching row count...</p>');
+    $('#t24RunBtn').addClass('d-none').off('click');
+    $('#t24CloseBtn').prop('disabled', false);
+
+    pauseIdleTimers();   
+    startHeartbeat();    
+
+    var modal = new bootstrap.Modal(document.getElementById('t24Modal'));
+    modal.show();
+
+    $.getJSON('/api/t24_count/' + tableId + '/')
+        .done(function(data) {
+            if (data.status === 'success') {
+                $('#t24Content').html(
+                    '<table class="table table-sm">' +
+                    '<thead><tr><th>Table</th><th>Row Count</th><th>Status</th><th>Inserted</th><th>Deleted</th><th>Time (s)</th></tr></thead>' +
+                    '<tbody>' +
+                    '<tr id="t24-row-' + tableId + '">' +
+                    '<td>' + tableName + '</td>' +
+                    '<td>' + data.count.toLocaleString() + '</td>' +
+                    '<td><span class="badge bg-secondary" id="t24-status-' + tableId + '">Ready</span></td>' +
+                    '<td id="t24-inserted-' + tableId + '">—</td>' +
+                    '<td id="t24-deleted-' + tableId + '">—</td>' +
+                    '<td id="t24-time-' + tableId + '">—</td>' +
+                    '</tr>' +
+                    '</tbody></table>' +
+                    '<div id="t24-total" class="mt-2 fw-bold"></div>'
+                );
+
+
+                $('#t24RunBtn').removeClass('d-none').on('click', function() {
+                    runT24Table(tableId, tableName, data.count);
+                });
+            } else {
+                $('#t24Content').html(
+                    '<div class="alert alert-danger">Error fetching count: ' +
+                    (data.error || 'Unknown error') + '</div>'
+                );
+            }
+        })
+        .fail(function() {
+            $('#t24Content').html(
+                '<div class="alert alert-danger">Failed to fetch row count. Please try again.</div>'
+            );
+        });
+}
+
+function runT24Table(tableId, tableName, rowCount) {
+    
+    $('#t24RunBtn').prop('disabled', true).text('Running...');
+    $('#t24CloseBtn').prop('disabled', true);
+    $('#t24-status-' + tableId).removeClass().addClass('badge bg-warning').text('Running...');
+
+    var start = Date.now();
+
+    $.ajax({
+        url: '/api/t24_run/' + tableId + '/',
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrftoken },
+        data: { row_count: rowCount },   
+        success: function(response) {
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            $('#t24-time-' + tableId).text(elapsed);
+
+            if (response.status === 'success') {
+                $('#t24-status-' + tableId)
+                    .removeClass().addClass('badge bg-success').text('Success');
+                $('#t24-inserted-' + tableId).text(
+                    (response.rows_inserted || 0).toLocaleString()
+                );
+                $('#t24-deleted-' + tableId).text(
+                    (response.rows_deleted || 0).toLocaleString()
+                );
+                $('#t24-total').html(
+                    '<span class="text-success">✓ Archival completed in ' +
+                    elapsed + ' seconds</span>'
+                );
+            } else {
+                $('#t24-status-' + tableId)
+                    .removeClass().addClass('badge bg-danger').text('Error');
+                $('#t24-total').html(
+                    '<span class="text-danger">✗ Error: ' +
+                    (response.error || 'Unknown error') + '</span>'
+                );
+            }
+        },
+        error: function(xhr) {
+            var elapsed = ((Date.now() - start) / 1000).toFixed(2);
+            $('#t24-time-' + tableId).text(elapsed);
+            $('#t24-status-' + tableId)
+                .removeClass().addClass('badge bg-danger').text('Error');
+            $('#t24-total').html(
+                '<span class="text-danger">✗ Request failed. Please check server logs.</span>'
+            );
+        },
+        complete: function() {
+         
+            $('#t24CloseBtn').prop('disabled', false);
+            $('#t24RunBtn').addClass('d-none').prop('disabled', false).text('Run Archival');
+            resumeIdleTimers();
+            stopHeartbeat();
+        }
+    });
+}
+</script> -->
+{% endblock %}

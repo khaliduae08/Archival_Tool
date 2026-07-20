@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import views
 
 urlpatterns = [
@@ -41,6 +42,7 @@ urlpatterns = [
     path('modules/<int:module_id>/tables/<int:pk>/edit/', views.table_edit, name='table_edit'),
     path('modules/<int:module_id>/tables/<int:pk>/delete/', views.table_delete, name='table_delete'),
 
+
     # Archival history
     path('transactions/', views.transaction_list, name='transaction_list'),
     path('transactions/<int:transaction_id>/', views.transaction_detail, name='transaction_detail'),
@@ -55,4 +57,18 @@ urlpatterns = [
     path('api/update_module_date/<int:module_id>/', views.update_module_date, name='update_module_date'),
     path('api/count_table/<int:table_id>/', views.get_table_count, name='count_table'),
     path('api/save_archival_history/<int:module_id>/', views.save_archival_history, name='save_archival_history'),
+
+    path('api/session_keepalive/', views.session_keepalive, name='session_keepalive'),
+
+    # T24 specific views
+    path('applications/<int:app_id>/tables/', views.t24_table_list, name='t24_table_list'),
+    path('applications/<int:app_id>/tables/add/', views.t24_table_add, name='t24_table_add'),
+    path('applications/<int:app_id>/tables/<int:pk>/edit/', views.t24_table_edit, name='t24_table_edit'),
+    path('applications/<int:app_id>/tables/<int:pk>/delete/', views.t24_table_delete, name='t24_table_delete'),
+    path('applications/<int:app_id>/tables/<int:pk>/run/', views.t24_table_run, name='t24_table_run'),
+
+
+    path('api/t24_count/<int:pk>/',   views.t24_get_count,  name='t24_get_count'),
+    path('api/t24_run/<int:pk>/',     views.t24_run_script, name='t24_run_script'),
+    path('api/t24_job_status/<str:job_id>/', views.t24_job_status, name='t24_job_status'),
 ]

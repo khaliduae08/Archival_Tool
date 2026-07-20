@@ -28,12 +28,18 @@
             <td>{{ app.dstn_conn }}</td>
             <td>{{ app.max_date|default:'Not set' }}</td>                        
             <td>
+                {% if 'T24' not in app.name %}
                 <a href="{% url 'module_list' app.id %}" class="btn btn-sm btn-info">Modules</a>
+                {% endif %}
                 {% if user.is_superuser or user.groups.all.0.name == 'admin'%}
                     <a href="{% url 'application_edit' app.id %}" class="btn btn-sm btn-warning">Edit</a>
                     <a href="{% url 'application_delete' app.id %}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this application?')">Delete</a>
                 {% endif %}
+                {% if 'T24' not in app.name %}
                 <a href="{% url 'module_run' app.id %}" class="btn btn-sm btn-success">Process</a>
+                {% else %}
+                <a href="{% url 't24_table_list' app.id %}" class="btn btn-sm btn-primary">Process</a>
+                {% endif %}
             </td>
         </tr>
         {% empty %}
