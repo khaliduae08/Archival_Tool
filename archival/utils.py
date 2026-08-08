@@ -31,6 +31,7 @@ def get_connection(conn):
         f"DATABASE={conn.database};"
         f"UID={conn.username};"
         f"PWD={conn.password};"
+        f"MARS_Connection=Yes;"
     )
     return pyodbc.connect(conn_str)
 

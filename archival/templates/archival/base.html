@@ -381,12 +381,14 @@
                                 countCell.text('Error');
                                 statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
                                 t.count = 0;
+                                t.countError = true;
                             }
                         })
                         .fail(function() {
                             countCell.text('Error');
                             statusSpan.removeClass('bg-info').addClass('bg-danger').text('Count failed');
                             t.count = 0;
+                            t.countError = true;
                         });
 
                         countPromises.push(promise);
@@ -433,6 +435,29 @@
                     var table      = tables[index];
                     var statusSpan = $('#status-' + table.id);
                     var timeCell   = $('#time-'   + table.id);
+                    var tableName  = table.table_name ||
+                     $('#table-' + table.id + ' td:first').text();
+                    var recordCount = parseInt(table.count, 10);
+                    if (!table.countError && recordCount === 0) {
+                        statusSpan.removeClass().addClass('badge bg-secondary').text('Skipped (0 rows)');
+                        timeCell.text('0.00');
+                        tableResults.push({
+                            table_name:     tableName,
+                            row_archived:   0,
+                            row_inserted:   0,
+                            row_deleted:    0,
+                            rows_merged:    0,
+                            execution_time: 0,
+                            status:         'success',   // use 'skipped' if your history API accepts it
+                            error_message:  ''
+                        });
+                        index++;
+                        runNext();
+                        return;
+                    }
+
+
+
                     statusSpan.removeClass('bg-secondary').addClass('bg-warning').text('Running...');
                     var tableStart = Date.now();
 

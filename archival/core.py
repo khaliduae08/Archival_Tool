@@ -16,6 +16,7 @@ def build_conn_str(db_conn):
         f"DATABASE={db_conn.database};"
         f"UID={db_conn.username};"
         f"PWD={db_conn.password};"
+        f"MARS_Connection=Yes;"
     )
 
 def archive_module(module_id, archival_date):
@@ -82,10 +83,12 @@ def archive_table_batch(table, archival_date, user=None):
                 CREATE CLUSTERED INDEX IX_{temp_table_name}_RECID 
                     ON {temp_table_name}(RECID);
                     """)
-            cur.execute(f"""
+            
+            sel_int_qry=f"""
                     INSERT INTO {temp_table_name} (RECID) 
                     SELECT DISTINCT * FROM ({select_sql}) AS src
-                """)
+                """
+            cur.execute(sel_int_qry)
             print(f"Temp Table Created {temp_table_name}: {cur.rowcount}")
 
         # with src_conn.cursor() as cur:
@@ -195,29 +198,47 @@ def archive_table_batch(table, archival_date, user=None):
             #     with src_conn.cursor() as cur:
             #                 cur.execute(final_delete)
             #                 # src_conn.commit()
+
             if delete_sql:
                 cur.execute(final_delete)
-                
-                if 'SELECT @@ROWCOUNT' in final_delete.upper():                    
-                    sql_before_rowcount = final_delete.upper().split('SELECT @@ROWCOUNT')[0]
-     
-                    skip_count = (
-                        sql_before_rowcount.count('ALTER TABLE') +
-                        sql_before_rowcount.count('DELETE ')
-                    )
-
-                    for _ in range(skip_count):
-                        cur.nextset()
-
-                    result = cur.fetchone()
-                    rows_deleted = result[0] if result else 0
-
-                    while cur.nextset():
-                        None
+                if 'SELECT @@ROWCOUNT' in final_delete.upper():
+                    row = cur.fetchone()          
+                    rows_deleted = row[0] if row else 0
+                    while cur.nextset():          
+                        pass
                 else:
                     rows_deleted = cur.rowcount
             else:
                 rows_deleted = 0
+
+            # if delete_sql:
+            #     cur.execute(final_delete)
+                
+            #     if 'SELECT @@ROWCOUNT' in final_delete.upper():                    
+            #         sql_before_rowcount = final_delete.upper().split('SELECT @@ROWCOUNT')[0]
+     
+
+
+
+
+     
+            #         skip_count = (
+            #             sql_before_rowcount.count('ALTER TABLE') +
+            #             sql_before_rowcount.count('DELETE ')
+            #         )
+
+            #         for _ in range(skip_count):
+            #             cur.nextset()
+
+            #         result = cur.fetchone()
+            #         rows_deleted = result[0] if result else 0
+
+            #         while cur.nextset():
+            #             None
+            #     else:
+            #         rows_deleted = cur.rowcount
+            # else:
+            #     rows_deleted = 0
 
             # print(f"Delete SQL: {final_delete}")
             # print(f"Rows deleted: {rows_deleted} and Rows inserted: {row_inserted}")

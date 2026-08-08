@@ -82,20 +82,8 @@ def process_bulk(insert_query, delete_query, dstn_conn_str, src_conn_str, dstn_t
         print(final_insert)      
         
 
-        if delete_query is not None:
-            conn_src = pyodbc.connect(src_conn_str)
-            cur_src = conn_src.cursor()
-            delete_filter = (
-            f"ABS(CAST(HASHBYTES('MD5', CAST(RECID AS VARCHAR(20))) AS BIGINT)) "
-            f"% {total_shards} = {shard_idx}"
-            )
-
-            final_delete = delete_query.replace(
-                "{ids}",
-                f"SELECT RECID FROM {temp_table_name} "
-                f"WHERE EXISTS(SELECT 1 FROM {dstn_table} dst WHERE dst.RECID = {temp_table_name}.RECID) "
-                f"AND {delete_filter}"
-            )
+        # if delete_query is not None:
+            
         # print (f"[consumer-{shard_idx}] {final_delete}")
 
 
@@ -106,11 +94,40 @@ def process_bulk(insert_query, delete_query, dstn_conn_str, src_conn_str, dstn_t
             total_inserted[0] += cur.rowcount
 
         if delete_query is not None:
+            conn_src = pyodbc.connect(src_conn_str)
+            cur_src = conn_src.cursor()
+            
+            delete_filter = (
+                f"ABS(CAST(HASHBYTES('MD5', CAST(RECID AS VARCHAR(20))) AS BIGINT)) "
+                f"% {total_shards} = {shard_idx}"
+            )
+            
+            final_delete = delete_query.replace(
+                "{ids}",
+                f"SELECT RECID FROM {temp_table_name} "
+                f"WHERE {delete_filter}"
+            )
             print(f"[consumer-{shard_idx}] Deleting shard {shard_idx}...")
-            cur_src.execute(final_delete)
-            conn_src.commit()
-            with ins_del_lock:
-                total_deleted[0] += cur_src.rowcount
+
+            del_script = f"DELETE FROM {temp_table_name} WHERE NOT EXISTS (SELECT 1 FROM {dstn_table} dst WHERE dst.RECID = {temp_table_name}.RECID)"
+            print(f"{del_script}")
+            cur_src.execute(del_script)
+            # conn_src.commit()
+
+            if "TOP" in delete_query:
+                while True:
+                    cur_src.execute(final_delete)
+                    n=cur_src.rowcount
+                    conn_src.commit()
+                    with ins_del_lock:
+                        total_deleted[0] += cur_src.rowcount
+                    if n == 0:
+                        break
+            else:
+                cur_src.execute(final_delete)
+                conn_src.commit()
+                with ins_del_lock:
+                    total_deleted[0] += cur_src.rowcount
 
         print(f"[consumer-{shard_idx}] Done.")
         return
