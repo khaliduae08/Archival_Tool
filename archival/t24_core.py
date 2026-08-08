@@ -246,7 +246,7 @@ def run_t24_table(table_id, row_count, user, job_id=None):
             userName=user,
             archival_date=table.archival_date,
             total_execution_time=execution_seconds,
-            module_id=10030
+            module_id=2
         )
 
         ArchivalTransactionDetail.objects.create(
@@ -282,7 +282,7 @@ def run_t24_table(table_id, row_count, user, job_id=None):
             userName=user,
             archival_date=table.archival_date,
             total_execution_time=execution_seconds,
-            module_id=10030
+            module_id=2
         )
 
         ArchivalTransactionDetail.objects.create(
